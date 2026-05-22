@@ -1,0 +1,37 @@
+{
+  "name": "multi-agent-memo",
+  "version": "0.1.0",
+  "description": "Shared memory MCP server for Claude, Codex, and Gemini CLI",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": [
+    "src",
+    "tsconfig.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "multi-agent-memo": "src/index.ts"
+  },
+  "scripts": {
+    "start": "node src/index.ts",
+    "dev": "node --watch src/index.ts",
+    "test": "node --test test/*.test.ts"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "agents",
+    "claude",
+    "codex",
+    "gemini"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
