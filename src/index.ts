@@ -17,6 +17,7 @@ import {
   startSession,
   summarizeSession,
 } from "./memory.js";
+import { readMemo, writeSession } from "./writedown.js";
 
 const server = new Server(
   { name: "multi-agent-memo", version: "0.1.0" },
@@ -148,6 +149,46 @@ const tools = [
       required: ["repo_path"],
     },
   },
+  {
+    name: "write_session",
+    description:
+      "Manually capture the current chat as a structured session writedown. Triggered by the user (e.g. /writedown), not automatically. Writes a new file under .memo/sessions/ and regenerates AGENTS.md with the latest state. Provide a structured snapshot in `content` (summary, decisions, files touched, current state, next steps, blockers).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo_path: { type: "string", description: "Absolute path to the project repo." },
+        agent: { type: "string", description: "Agent writing the writedown: claude, codex, or gemini." },
+        persona: { type: "string", description: "Role for this session, e.g. coder, architect, reviewer." },
+        content: {
+          type: "string",
+          description:
+            "The structured session snapshot as Markdown. Recommended sections: Summary, Decisions, Files touched, Current state, Next steps, Blockers.",
+        },
+        summary: {
+          type: "string",
+          description:
+            "Optional one-line summary for the session index. Defaults to the first heading/line of content.",
+        },
+      },
+      required: ["repo_path", "agent", "persona", "content"],
+    },
+  },
+  {
+    name: "read_memo",
+    description:
+      "Manually load prior context into the current chat. Triggered by the user (e.g. /readmemo). Returns the latest N session writedowns in full plus an index of all sessions on file. Use this at the start of a fresh chat to recover where work left off.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repo_path: { type: "string", description: "Absolute path to the project repo." },
+        last_n: {
+          type: "integer",
+          description: "How many of the most recent writedowns to return in full. Defaults to 1.",
+        },
+      },
+      required: ["repo_path"],
+    },
+  },
 ];
 
 // ── resources ─────────────────────────────────────────────────────────────────
@@ -268,6 +309,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         parsed.filter_agent,
         parsed.filter_persona
       );
+    } else if (name === "write_session") {
+      const parsed = z
+        .object({
+          repo_path: z.string(),
+          agent: z.string(),
+          persona: z.string(),
+          content: z.string(),
+          summary: z.string().optional(),
+        })
+        .parse(args);
+      result = writeSession(
+        parsed.repo_path,
+        parsed.agent,
+        parsed.persona,
+        parsed.content,
+        parsed.summary
+      );
+    } else if (name === "read_memo") {
+      const parsed = z
+        .object({ repo_path: z.string(), last_n: z.number().int().positive().optional() })
+        .parse(args);
+      result = readMemo(parsed.repo_path, parsed.last_n ?? 1);
     } else {
       throw new Error(`Unknown tool: ${name}`);
     }
