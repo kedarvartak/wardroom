@@ -1,242 +1,131 @@
-<div align="center">
+# wardroom
 
-# multi-agent-memo
+One terminal harness for parallel AI coding agents on one checkout.
 
-![npm](https://img.shields.io/npm/v/multi-agent-memo?style=flat-square&color=black)
-![license](https://img.shields.io/npm/l/multi-agent-memo?style=flat-square&color=black)
-![node](https://img.shields.io/node/v/multi-agent-memo?style=flat-square&color=black)
+Claude Code, Codex, and Gemini CLI plan together, talk to each other, and
+build simultaneously in the same working tree. No worktrees. No merge
+conflicts. You watch the whole crew from a single terminal and steer it.
+
+![npm](https://img.shields.io/npm/v/wardroom?style=flat-square&color=black)
+![license](https://img.shields.io/npm/l/wardroom?style=flat-square&color=black)
+![node](https://img.shields.io/node/v/wardroom?style=flat-square&color=black)
 ![mcp](https://img.shields.io/badge/MCP-compatible-black?style=flat-square)
 
-<img src="https://github.com/kedarvartak/multi-agent-memo/blob/main/docs/banner.png" alt="multi-agent-memo" width="100%" />
-
-**Shared memory MCP server for Claude Code, Codex, and Gemini CLI.**  
-One append-only `AGENTS.md` in your repo. Every agent reads it. Every agent writes to it. No copy-paste. No cold starts.
-
-</div>
+The wardroom is the room on a warship where officers meet, plan, and
+coordinate the running of the ship. One ship, one crew, one table.
 
 ---
 
-## The Problem
+## Why this exists
 
-Claude Code, Codex, and Gemini each start cold. They share no context — every session you re-explain decisions, re-describe architecture, and re-route work. The more agents you use, the worse it gets.
+The standard answer to parallel coding agents is isolation: a git worktree,
+branch, or container per agent. That works only when tasks have clean
+separation of concerns. The moment tasks touch overlapping files, isolation
+does not prevent the conflict — it defers it to merge time, where context is
+worst. Empirical studies of agent-authored pull requests put merge-conflict
+rates at 27 to 42 percent for co-active work, and the standard remedy is a
+human merging branches one at a time — re-serializing the parallelism by
+hand.
 
-## How It Works
+Subagents inside a single tool do not solve it either: isolated contexts, no
+agent-to-agent communication, results funneled through one orchestrator, and
+roughly 15x token cost. They are a map-reduce over reads, not a team of
+writers.
 
-```
-your project repo
-└── AGENTS.md  ◄── single source of truth, versioned with your code
+Wardroom takes the third path: a shared checkout with real coordination.
+Conflicts are prevented before the edit instead of merged after. The full
+research with sources is in [docs/parallelism.md](docs/parallelism.md).
 
-          ┌─────────────┐
-          │  MCP Server │  (multi-agent-memo)
-          └──────┬──────┘
-                 │  tools/list, tools/call (stdio)
-       ┌─────────┼─────────┐
-       ▼         ▼         ▼
-  Claude Code  Codex    Gemini CLI
-  reads        reads    reads
-  writes       writes   writes
-       └─────────┬─────────┘
-                 ▼
-           AGENTS.md
-```
+## How it works
 
-Each CLI connects to the same MCP server. Before every session it reads recent context. After completing work it appends its output. All agents stay in sync automatically.
+![Architecture](docs/diagrams/architecture.png)
 
----
+Three layers, all state in plain files under `.memo/` in your repo:
 
-## Tools
+1. **Coordination core** (shipped). A dependency-aware task board where
+   every task declares the files it will touch; `claim_next_task` atomically
+   hands an agent the next task whose dependencies are done and whose files
+   nobody else holds, then leases those files. Advisory TTL file leases for
+   ad-hoc edits. A cursor-pollable event bus for broadcasts. Disjoint tasks
+   run truly in parallel; colliding tasks serialize automatically.
+
+2. **Memory** (shipped). Structured session writedowns captured on demand;
+   `AGENTS.md` is regenerated as the cold-start index every agent reads
+   first. A fresh session resumes where the last one stopped.
+
+3. **The harness** (in development, see the plan). A single `wardroom` CLI
+   that spawns each agent CLI as a headless worker, gives agents directed
+   messaging so they can ask each other questions and announce changes, and
+   renders everything live in one terminal: the board, each agent's work
+   stream, and the crosstalk between them.
+
+![Session flow](docs/diagrams/session-flow.png)
+
+## Current state
+
+Today wardroom is the coordination core plus memory, exposed as an MCP
+server that Claude Code, Codex, and Gemini CLI connect to from their own
+terminals. The single-terminal harness is being built on top of it — the
+full product plan, architecture, and phased delivery with acceptance
+criteria is in [docs/plan.md](docs/plan.md).
+
+![Roadmap](docs/diagrams/roadmap.png)
+
+## Tools (MCP surface)
 
 | Tool | Purpose |
 |------|---------|
-| `start_session` | Open a dated session block for an `agent/persona` pair |
-| `append_message` | Write one message line — agent or user |
-| `read_memory` | Read full log, filter by `agent` or `persona` |
-| `get_context` | Return last N messages as compact context lines |
-| `search_memory` | Keyword search with optional `agent`, `persona`, `#tag` filters |
-| `summarize_session` | Return participants, decisions, blockers, todos for a session |
-| `get_decisions` | Extract decisions via `#decision` tags and heuristics |
+| `get_context` | One call: latest writedown, task board, claims, recent events |
+| `plan_tasks` | Create tasks with file footprints and dependencies |
+| `claim_next_task` | Atomically pull the next runnable, non-conflicting task |
+| `complete_task` / `fail_task` / `release_task` | Finish or return work; releases leases |
+| `get_board` | Render the full task board |
+| `claim_files` / `release_files` / `check_files` | Advisory TTL file leases |
+| `post_event` / `get_events` | Broadcast and cursor-poll the shared event stream |
+| `write_session` / `read_memo` | Durable session writedowns |
 
-### Inline Tags
-
-Append tags anywhere in a message to mark its type:
-
-| Tag | Meaning |
-|-----|---------|
-| `#decision` | A choice that was made and should not be revisited |
-| `#blocker` | Something preventing progress |
-| `#todo` | Work that still needs to happen |
-
----
-
-## Memory Format
-
-`AGENTS.md` is append-only, human-readable Markdown. Versioned header prevents newer-format files from being corrupted by older server versions.
-
-```markdown
----
-format: 1
-project: my-repo
-created: 2026-05-22
----
-
-# Agent Memory
-
-## Session: 2026-05-22
-
-### codex — coder
-**codex** — Implementing the refresh endpoint.
-**me** — Use Redis for persistence. #decision
-**codex** — Added ioredis dependency.
-
-### gemini — reviewer
-**gemini** — JWT refresh handling is blocked on test coverage. #blocker
-
-### claude — architect
-**me** — Document token expiry behavior. #todo
-**claude** — Done, see docs/auth.md.
-```
-
----
-
-## Install
+## Install and wire
 
 ```bash
-npm install -g multi-agent-memo
-# or use without installing:
-npx multi-agent-memo
+npm install -g wardroom    # or npx wardroom
 ```
 
-Requires Node >= 22.
-
----
-
-## Wiring
-
-### Claude Code
-
-Add to your project's `.claude/settings.json`:
+Register the MCP server in each CLI (Claude Code `.claude/settings.json`,
+Codex `~/.codex/config.json`, Gemini `~/.gemini/settings.json`):
 
 ```json
 {
   "mcpServers": {
-    "multi-agent-memo": {
-      "command": "npx",
-      "args": ["multi-agent-memo"]
-    }
-  },
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash /path/to/multi-agent-memo/scripts/inject-memory.sh"
-          }
-        ]
-      }
-    ]
+    "wardroom": { "command": "npx", "args": ["wardroom"] }
   }
 }
 ```
 
-The `UserPromptSubmit` hook injects the last 30 messages from `AGENTS.md` into every prompt automatically — no tool call needed.
+Copy `CLAUDE.md` and `GEMINI.md` from this repo into your project root;
+Codex reads the generated `AGENTS.md` natively. Full wiring, including the
+optional cold-start injection hook, is in [docs/setup.md](docs/setup.md).
 
-Also copy `CLAUDE.md` from this repo into your project root. Claude Code auto-loads it.
+## Documentation
 
-### Codex
-
-Codex CLI natively reads `AGENTS.md` at the project root — no extra config for memory injection. Register the MCP server for write-back:
-
-```json
-{
-  "mcpServers": {
-    "multi-agent-memo": {
-      "command": "npx",
-      "args": ["multi-agent-memo"]
-    }
-  }
-}
-```
-
-### Gemini CLI
-
-```json
-{
-  "mcpServers": {
-    "multi-agent-memo": {
-      "command": "npx",
-      "args": ["multi-agent-memo"]
-    }
-  }
-}
-```
-
-Copy `GEMINI.md` from this repo into your project root. Gemini CLI auto-loads it and follows the read-before/write-after pattern.
-
----
-
-## How Memory Stays Visible
-
-Different mechanism per CLI — same result: every agent sees the log before acting.
-
-```
-Claude Code  ──►  UserPromptSubmit hook injects last 30 messages before every prompt
-Codex        ──►  reads AGENTS.md natively at session start
-Gemini CLI   ──►  GEMINI.md instructs it to call get_context first
-All three    ──►  MCP resource memo://agents-md available for proactive fetch
-```
-
----
-
-## Usage Pattern
-
-```
-1.  Start a session
-    start_session(repo_path="/your/project", agent="claude", persona="architect")
-
-2.  Log messages as you work
-    append_message(..., speaker="claude", message="Scaffolded auth module under src/auth/.")
-    append_message(..., speaker="me",     message="Add refresh token support. #todo")
-
-3.  Switch agents — pick up context
-    get_context(repo_path="/your/project", last_n=20)
-
-4.  Search across history
-    search_memory(repo_path="/your/project", query="Redis", filter_tag="decision")
-
-5.  Summarize at end of session
-    summarize_session(repo_path="/your/project")
-```
-
----
+| Document | Contents |
+|----------|----------|
+| [docs/plan.md](docs/plan.md) | Product plan: vision, harness architecture, phases, acceptance criteria, risks |
+| [docs/parallelism.md](docs/parallelism.md) | Research: worktrees vs subagents vs shared-checkout coordination, with sources |
+| [docs/architecture.md](docs/architecture.md) | Coordination core internals: subsystems, on-disk layout, concurrency design |
+| [docs/protocol.md](docs/protocol.md) | The rules agents follow on a shared checkout |
+| [docs/setup.md](docs/setup.md) | Wiring guide for each CLI |
 
 ## Development
 
 ```bash
-git clone https://github.com/your-org/multi-agent-memo
-cd multi-agent-memo
+git clone https://github.com/kedarvartak/wardroom
+cd wardroom
 npm install
 
-npm run build   # compile TypeScript → dist/
-npm test        # run test suite (Node 22 native test runner)
-npm start       # start MCP server over stdio
+npm run build   # compile TypeScript to dist/
+npm test        # Node 22 native test runner, incl. multi-process concurrency tests
+npm start       # start the MCP server over stdio
 ```
-
-All 7 tests cover the full memory API: session lifecycle, filtering, search, decisions, and summarization.
-
----
-
-## Roadmap
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 1 — Core MCP | Done | `start_session`, `append_message`, `read_memory`, `get_context` |
-| 2 — Intelligence | Done | `search_memory`, `summarize_session`, `get_decisions`, inline tags |
-| 3 — Personas | Planned | `personas.json`, auto-inject persona context, `handoff_to` tool |
-| 4 — Orchestration | Planned | Headless dispatch to all three CLIs, parallel and sequential modes |
-| 5 — Web UI | Planned | Browser interface, Cloudflare Tunnel, streaming agent panels |
-
----
 
 ## License
 

@@ -7,7 +7,7 @@ import test from "node:test";
 import { listWritedowns, readMemo, writeSession } from "../src/writedown.ts";
 
 function makeRepo(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "multi-agent-memo-wd-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "wardroom-wd-"));
 }
 
 test("writeSession creates a per-session file and a derived AGENTS.md", () => {

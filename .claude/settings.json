@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /path/to/multi-agent-memo/scripts/inject-memory.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/inject-memory.sh\""
           }
         ]
       }

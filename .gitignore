@@ -1,2 +1,8 @@
 /node_modules
 /dist
+
+# Ephemeral coordination state — durable memory (.memo/sessions/) IS committed
+.memo/tasks.json
+.memo/claims.json
+.memo/events.ndjson
+.memo/*.lock

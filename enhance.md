@@ -1,4 +1,4 @@
-# enhance.md — Hardening `multi-agent-memo`
+# enhance.md — Hardening `wardroom`
 
 > A detailed engineering review of what this project is *for*, where it is
 > **brittle**, and a prioritized plan to make it reliable enough to trust as the
@@ -66,7 +66,7 @@ plus IDE extensions. Two recurring pains motivate this project:
 
 The project's answer is a **single shared, append-only memory log** —
 `AGENTS.md` at the repo root — exposed through an **MCP server**
-(`multi-agent-memo`). Every agent reads recent context before acting and writes
+(`wardroom`). Every agent reads recent context before acting and writes
 its output after. Because the log lives *in the repo*, it versions with the code
 and is portable across every tool that speaks MCP.
 
@@ -116,9 +116,9 @@ on every call (`parseEntries`, `memory.ts:200`).
 
 ## 3. Brittleness Catalog
 
-Ordered roughly by blast radius. Severity: 🔴 critical · 🟠 high · 🟡 medium.
+Ordered roughly by blast radius. Severity: [critical] critical · [high] high · [medium] medium.
 
-### 3.1 🔴 No concurrency control — the core promise is unguarded
+### 3.1 [critical] No concurrency control — the core promise is unguarded
 **Where:** `appendText` → `fs.appendFileSync` (`memory.ts:135-137`); the
 read→compute→append sequence in `ensureSessionAndSection` + `appendMessage`
 (`memory.ts:240-303`).
@@ -135,7 +135,7 @@ There is no `flock`, no lockfile, no atomic `rename()`, no write queue. Under th
 exact workload this tool advertises (parallel dispatch in Phase 4 makes this
 *guaranteed*), the log silently corrupts. This is the single most important fix.
 
-### 3.2 🔴 Agent header is re-emitted before *every* message
+### 3.2 [critical] Agent header is re-emitted before *every* message
 **Where:** `ensureSessionAndSection` (`memory.ts:240-258`), specifically the
 `trimmed.endsWith(agentHeader)` check.
 
@@ -159,7 +159,7 @@ header per consecutive run of an agent's messages — never happens. Result: noi
 bloated logs and inflated `participants` counts. (The grep-based hook hides this
 from Claude, which is why it went unnoticed.)
 
-### 3.3 🔴 Storage format == parse format, with no escaping
+### 3.3 [critical] Storage format == parse format, with no escaping
 **Where:** `MESSAGE_RE` (`memory.ts:8`), `AGENT_HEADER_RE` (`memory.ts:7`),
 `SESSION_HEADER_RE` (`memory.ts:6`), `parseEntries` (`memory.ts:200`).
 
@@ -177,7 +177,7 @@ is never escaped. Any of these break round-tripping:
   flattens newlines to spaces, so code blocks, lists, and diffs — exactly what
   coding agents produce — are collapsed into one unreadable line.
 
-### 3.4 🟠 Sessions keyed by date conflate distinct work
+### 3.4 [high] Sessions keyed by date conflate distinct work
 **Where:** `today()` (`memory.ts:60-62`), `SESSION_HEADER_RE`,
 `summarizeSession` (`memory.ts:421`).
 
@@ -189,7 +189,7 @@ uses UTC (`toISOString`), so work spanning local midnight may split or merge
 unexpectedly. There is no session ID, no start/end time, no notion of a
 "handoff."
 
-### 3.5 🟠 Read-whole-file-and-reparse on every call — degrades with size
+### 3.5 [high] Read-whole-file-and-reparse on every call — degrades with size
 **Where:** every public function calls `readFile` + `parseEntries` over the
 *entire* file; e.g. `getContext` (`memory.ts:336-352`) reparses everything just
 to `slice(-lastN)`.
@@ -200,7 +200,7 @@ will itself slow down and eventually return a multi-thousand-line `read_memory`
 blob that blows the consumer's context window. There is no pagination, no index,
 no rollup, no "distilled current state" view.
 
-### 3.6 🟠 Write-back is advisory, not enforced — silent memory gaps
+### 3.6 [high] Write-back is advisory, not enforced — silent memory gaps
 **Where:** the whole protocol depends on `CLAUDE.md` / `GEMINI.md` *instructing*
 the model to call `append_message` after work.
 
@@ -209,20 +209,20 @@ There is no `Stop`/`SessionEnd` hook that auto-captures a turn, no reconciliatio
 no "you did work but logged nothing" nudge. Reliability of the entire system is
 bounded by the model's compliance — the weakest possible guarantee.
 
-### 3.7 🟠 Ships broken out of the box
-- **Self-dependency.** `package.json:37` lists `"multi-agent-memo": "^0.1.0"` as
+### 3.7 [high] Ships broken out of the box
+- **Self-dependency.** `package.json:37` lists `"wardroom": "^0.1.0"` as
   a dependency *of itself* (introduced by commit `043f7d7`). This is circular and
   will confuse `npm install` / publish.
 - **Placeholder paths committed.** `.claude/settings.json:9` and the README/setup
-  snippets hardcode `/path/to/multi-agent-memo/...`. Copy-paste yields a
+  snippets hardcode `/path/to/wardroom/...`. Copy-paste yields a
   non-functional hook with no error surfaced (`inject-memory.sh` `exit 0`s
   silently if the file is missing).
 - **Run-instruction drift.** `docs/setup.md` says `node /path/.../src/index.ts`
   (a `.ts` file that won't run without `--experimental-strip-types`), while the
-  README uses `npx multi-agent-memo` (the built `dist/`). Two contradictory
+  README uses `npx wardroom` (the built `dist/`). Two contradictory
   install paths.
 
-### 3.8 🟡 Decision heuristic is noisy
+### 3.8 [medium] Decision heuristic is noisy
 **Where:** `DECISION_HINT_RE` (`memory.ts:10`), `isDecisionEntry`
 (`memory.ts:152`).
 
@@ -231,7 +231,7 @@ false positives — "I didn't **use** Redis" or "should we **use** X?" both
 register as decisions. `get_decisions` and the summary's decision list become
 untrustworthy, which undermines the highest-value query in the tool.
 
-### 3.9 🟡 "Semantic search" is substring matching
+### 3.9 [medium] "Semantic search" is substring matching
 **Where:** `scoreEntry` (`memory.ts:164`), `normalizeSearchTerms`
 (`memory.ts:156`); roadmap claims "keyword/semantic search."
 
@@ -239,7 +239,7 @@ untrustworthy, which undermines the highest-value query in the tool.
 stemming/stopwords, no fuzzy or embedding match. README/roadmap over-claim
 "semantic." Fine as a v1, but the gap between promise and reality should close.
 
-### 3.10 🟡 No agent/identity validation; case-sensitive filters
+### 3.10 [medium] No agent/identity validation; case-sensitive filters
 **Where:** `normalizeLabel` (`memory.ts:109`); filters in `readMemory`,
 `searchMemory`, etc. compare with exact `===`.
 
@@ -247,7 +247,7 @@ stemming/stopwords, no fuzzy or embedding match. README/roadmap over-claim
 phantom identities that filters silently miss. Nothing enforces the
 claude/codex/gemini set or a known persona vocabulary.
 
-### 3.11 🟡 Arbitrary filesystem write surface
+### 3.11 [medium] Arbitrary filesystem write surface
 **Where:** `assertRepoPath` only checks *absoluteness* (`memory.ts:64-68`);
 `ensureFile` does `mkdirSync(..., {recursive:true})` + write (`memory.ts:83-88`).
 
@@ -255,7 +255,7 @@ Any caller-supplied absolute `repo_path` causes the server to create directories
 and write `AGENTS.md` **anywhere on disk**. No allowlist, no containment. A typo
 or hostile prompt can scribble files outside the project.
 
-### 3.12 🟡 Double-injection + fragile hook
+### 3.12 [medium] Double-injection + fragile hook
 **Where:** `scripts/inject-memory.sh:14` *and* `CLAUDE.md` instruction to also
 call `get_context`.
 
@@ -263,7 +263,7 @@ Claude gets the same context twice (hook injection + tool call), wasting tokens.
 The hook `grep`s on the em-dash literal and a `tail -30` with no token budget,
 dedup, or session awareness — and fails silently on any format drift.
 
-### 3.13 🟡 Test coverage misses everything that breaks
+### 3.13 [medium] Test coverage misses everything that breaks
 **Where:** `test/memory.test.ts` — 7 happy-path unit tests over `memory.ts`.
 
 No tests for: concurrent writes, the header-duplication bug (§3.2), multi-line
@@ -371,19 +371,19 @@ a *curated decision record*.
 
 | # | Severity | One-liner | Primary file |
 |---|----------|-----------|--------------|
-| 3.1 | 🔴 | No locking on concurrent writes | `memory.ts:135,240` |
-| 3.2 | 🔴 | Agent header repeats every message | `memory.ts:240` |
-| 3.3 | 🔴 | Content not escaped; multi-line lost | `memory.ts:8,120` |
-| 3.4 | 🟠 | Sessions keyed by date only | `memory.ts:60,421` |
-| 3.5 | 🟠 | Reparse whole file every call; no compaction | `memory.ts:200,336` |
-| 3.6 | 🟠 | Write-back advisory, not enforced | `CLAUDE.md`/hook |
-| 3.7 | 🟠 | Self-dependency + placeholder paths | `package.json:37` |
-| 3.8 | 🟡 | Noisy decision heuristic | `memory.ts:10` |
-| 3.9 | 🟡 | "Semantic" search is substring | `memory.ts:164` |
-| 3.10 | 🟡 | No identity validation; case-sensitive | `memory.ts:109` |
-| 3.11 | 🟡 | Arbitrary FS write surface | `memory.ts:64` |
-| 3.12 | 🟡 | Double-injection + fragile hook | `inject-memory.sh:14` |
-| 3.13 | 🟡 | Tests miss every real failure mode | `test/memory.test.ts` |
+| 3.1 | [critical] | No locking on concurrent writes | `memory.ts:135,240` |
+| 3.2 | [critical] | Agent header repeats every message | `memory.ts:240` |
+| 3.3 | [critical] | Content not escaped; multi-line lost | `memory.ts:8,120` |
+| 3.4 | [high] | Sessions keyed by date only | `memory.ts:60,421` |
+| 3.5 | [high] | Reparse whole file every call; no compaction | `memory.ts:200,336` |
+| 3.6 | [high] | Write-back advisory, not enforced | `CLAUDE.md`/hook |
+| 3.7 | [high] | Self-dependency + placeholder paths | `package.json:37` |
+| 3.8 | [medium] | Noisy decision heuristic | `memory.ts:10` |
+| 3.9 | [medium] | "Semantic" search is substring | `memory.ts:164` |
+| 3.10 | [medium] | No identity validation; case-sensitive | `memory.ts:109` |
+| 3.11 | [medium] | Arbitrary FS write surface | `memory.ts:64` |
+| 3.12 | [medium] | Double-injection + fragile hook | `inject-memory.sh:14` |
+| 3.13 | [medium] | Tests miss every real failure mode | `test/memory.test.ts` |
 
 ---
 

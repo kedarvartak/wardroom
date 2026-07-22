@@ -1,7 +1,7 @@
 {
-  "name": "multi-agent-memo",
-  "version": "0.1.0",
-  "description": "Shared memory MCP server for Claude, Codex, and Gemini CLI",
+  "name": "wardroom",
+  "version": "0.2.0",
+  "description": "One terminal harness for parallel AI coding agents on one checkout. Claude, Codex, and Gemini plan, talk, and build together - no worktrees, no merge conflicts.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "bin": {
-    "multi-agent-memo": "dist/index.js"
+    "wardroom": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -24,17 +24,19 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "mcp",
-    "memory",
     "agents",
+    "orchestration",
+    "coordination",
+    "parallel",
+    "mcp",
     "claude",
     "codex",
-    "gemini"
+    "gemini",
+    "harness"
   ],
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "multi-agent-memo": "^0.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

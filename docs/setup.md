@@ -3,29 +3,31 @@
 ## Install
 
 ```bash
-cd /path/to/multi-agent-memo
-npm install
-
-# make the entry point executable
-chmod +x src/index.ts
+npm install -g wardroom    # or use npx wardroom without installing
 ```
+
+From a clone: `npm install && npm run build`, then the server is
+`node dist/index.js`.
+
+Requires Node >= 22.
 
 ## Wire into Claude Code
 
-**Step 1 — Register the MCP server.** Add to your project's `.claude/settings.json`:
+**Step 1 — Register the MCP server** in your project's `.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
-    "multi-agent-memo": {
-      "command": "node",
-      "args": ["/path/to/multi-agent-memo/src/index.ts"]
+    "wardroom": {
+      "command": "npx",
+      "args": ["wardroom"]
     }
   }
 }
 ```
 
-**Step 2 — Auto-inject memory via hook.** Claude Code runs `UserPromptSubmit` hooks before every prompt. Add this to `.claude/settings.json` alongside the MCP config:
+**Step 2 — Cold-start injection (optional).** A `UserPromptSubmit` hook
+injects the latest writedown before every prompt:
 
 ```json
 {
@@ -35,7 +37,7 @@ chmod +x src/index.ts
         "hooks": [
           {
             "type": "command",
-            "command": "bash /path/to/multi-agent-memo/scripts/inject-memory.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/node_modules/wardroom/scripts/inject-memory.sh\""
           }
         ]
       }
@@ -44,93 +46,67 @@ chmod +x src/index.ts
 }
 ```
 
-The script reads the last 30 messages from `AGENTS.md` and wraps them in `<agent_memory>` tags. Claude sees this context before every message — no tool call required.
+(Adjust the path if you installed globally or run from a clone — the script is
+`scripts/inject-memory.sh` in the package.)
 
-**Step 3 — Add `CLAUDE.md` to your project.** Copy the `CLAUDE.md` from this repo into your project root. Claude Code auto-loads it and the instructions tell Claude to write back to memory after completing work.
+**Step 3 — Copy `CLAUDE.md`** from this repo into your project root. It
+teaches Claude the shared-checkout protocol (claim before edit, pull tasks
+atomically, announce changes).
 
 ## Wire into Codex
 
-Codex CLI **natively reads `AGENTS.md`** at the project root before every session — no extra config needed for memory injection. Just register the MCP server so Codex can write back to it:
-
-Add to `~/.codex/config.json`:
+Codex CLI natively reads `AGENTS.md` at the project root, so it cold-starts
+from the generated index automatically. Register the MCP server for
+coordination and write-back — in `~/.codex/config.json`:
 
 ```json
 {
   "mcpServers": {
-    "multi-agent-memo": {
-      "command": "node",
-      "args": ["/path/to/multi-agent-memo/src/index.ts"]
+    "wardroom": {
+      "command": "npx",
+      "args": ["wardroom"]
     }
   }
 }
 ```
 
-Since Codex reads `AGENTS.md` natively, it will always see the full shared log automatically. It still uses the MCP tools to append new entries.
+Add the protocol rules from `docs/protocol.md` to your `AGENTS.md`-adjacent
+instructions if you want Codex to follow the claim/task discipline strictly.
 
 ## Wire into Gemini CLI
 
-**Step 1 — Register the MCP server.** Add to `~/.gemini/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "multi-agent-memo": {
-      "command": "node",
-      "args": ["/path/to/multi-agent-memo/src/index.ts"]
-    }
-  }
-}
-```
-
-**Step 2 — Add `GEMINI.md` to your project.** Gemini CLI auto-loads `GEMINI.md` from the project root. Copy the `GEMINI.md` from this repo — it instructs Gemini to call `get_context` first and `append_message` after completing work.
+Register the server in `~/.gemini/settings.json` (same JSON as above) and
+copy `GEMINI.md` from this repo into your project root.
 
 ## Usage Pattern
 
-At the start of every session, whichever agent you open first should call:
-
 ```
-start_session(repo_path="/your/project", agent="claude", persona="architect")
-```
-
-Then for every message exchange:
-
-```
-append_message(repo_path="/your/project", agent="claude", persona="architect", speaker="claude", message="I scaffolded the auth module.")
-append_message(repo_path="/your/project", agent="claude", persona="architect", speaker="me", message="Good. Add refresh token support.")
-```
-
-To pick up context when switching agents:
-
-```
-get_context(repo_path="/your/project", last_n=20)
+1. Join         get_context(repo_path="/your/project")
+2. Plan once    plan_tasks(repo_path=..., agent="claude", tasks=[
+                  { "title": "Define shared types", "files": ["src/types.ts"] },
+                  { "title": "Build API",           "files": ["src/api/**"],  "depends_on": ["$0"] },
+                  { "title": "Build UI",            "files": ["src/ui/**"],   "depends_on": ["$0"] }
+                ])
+3. Work loop    claim_next_task → edit → complete_task   (each agent, repeatedly)
+4. Ad-hoc edit  claim_files → edit → release_files
+5. Announce     post_event(..., type="heads-up", message="renamed X → Y")
+6. Catch up     get_events(since_seq=<cursor>)
+7. End of day   /writedown  → write_session
 ```
 
-The `AGENTS.md` file will be created automatically at the root of your project repo on first write.
+See `docs/protocol.md` for the full rules and `docs/architecture.md` for how
+it works underneath.
 
 ## Available Tools
 
 | Tool | Purpose |
 |------|---------|
-| `start_session` | Open a new session block (call once per working session) |
-| `append_message` | Write one message line (agent or user) |
-| `read_memory` | Read full log, optionally filter by agent |
-| `get_context` | Get last N messages for context injection |
-| `search_memory` | Search recent or historical memory by keyword and optional tag |
-| `summarize_session` | Summarize a session into participants, decisions, blockers, and todos |
-| `get_decisions` | Extract only decision-type entries from memory |
-
-## Tags
-
-You can add inline tags directly in `append_message` content:
-
-```text
-#decision
-#blocker
-#todo
-```
-
-Example:
-
-```text
-append_message(repo_path="/your/project", agent="codex", persona="coder", speaker="me", message="Use Redis for persistence. #decision")
-```
+| `get_context` | One-call snapshot: latest writedown + board + claims + events |
+| `plan_tasks` | Add tasks with file footprints and dependencies |
+| `claim_next_task` | Atomically pull the next runnable, non-conflicting task |
+| `complete_task` / `fail_task` / `release_task` | Finish or return a task; releases its leases |
+| `get_board` | Render the full task board |
+| `claim_files` / `release_files` / `check_files` | Advisory TTL file leases |
+| `post_event` / `get_events` | Broadcast + cursor-poll the shared event stream |
+| `write_session` | Capture a structured session writedown (`/writedown`) |
+| `read_memo` | Reload prior writedowns into a fresh chat (`/readmemo`) |

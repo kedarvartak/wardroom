@@ -1,23 +1,26 @@
 # Gemini — Agent Instructions
 
-## Shared Memory
+This project runs multiple agents (Claude, Codex, Gemini) **in parallel on one
+shared checkout — no worktrees**. Coordination goes through the
+`wardroom` MCP server. Full protocol: `docs/protocol.md`.
 
-This project uses a shared memory log at `AGENTS.md`. Claude, Codex, and Gemini all read and write this file through the `multi-agent-memo` MCP server.
+## Before touching anything
 
-**Before making any change**, call:
 ```
-get_context(repo_path="<this repo's absolute path>", last_n=30)
-```
-
-**After completing work**, log it:
-```
-start_session(repo_path="...", agent="gemini", persona="<your role>")
-append_message(repo_path="...", agent="gemini", persona="<your role>", speaker="gemini", message="<what you did or decided>")
+get_context(repo_path="<this repo's absolute path>")
 ```
 
-## Personas for This Project
+## While working
 
-Pick the persona that matches your task:
-- `reviewer` — code review, catching bugs
-- `junior developer` — small tasks, fixes, formatting
-- `researcher` — looking things up, summarizing docs
+- Pull work with `claim_next_task`; it leases the task's files for you.
+- Editing outside a task: `claim_files` first, `release_files` right after.
+  On conflict, another agent holds those files — take other work instead.
+- Announce breaking mid-flight changes with `post_event`; poll
+  `get_events(since_seq=<cursor>)` between tasks.
+- Finish every task with `complete_task`, `fail_task`, or `release_task` —
+  never stop while holding a claim.
+
+## Memory
+
+`/writedown` → `write_session` captures the session.
+`/readmemo` → `read_memo` reloads prior sessions in a fresh chat.
