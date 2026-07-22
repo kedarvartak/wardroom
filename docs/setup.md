@@ -122,6 +122,8 @@ wardroom           start the interactive conductor console (single terminal):
 wardroom crew      list configured agents and check each is installed
 wardroom watch     live dashboard (board, claims, crosstalk, events)
 wardroom board     print the task board and exit
+wardroom changes   what each task changed (files, +/-)
+wardroom show <t>  a task's change summary and full diff
 wardroom log -f    merged events + messages timeline, follow mode
 wardroom say "<msg>" [--to agent] [--kind question|info] [--thread N]
 wardroom plan "<goal>" [--yes]  |  wardroom plan --from FILE

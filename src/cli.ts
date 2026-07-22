@@ -29,6 +29,8 @@ commands:
                           with a goal, plan+approve first
   watch                   live dashboard: board, claims, crosstalk, events
   board                   print the task board and exit
+  changes                 what each task changed (files, +/-)
+  show <task-id>          a task's change summary and full diff
   log [-n N] [--follow]   merged events + messages timeline
   say <msg> [--to AGENT] [--kind KIND] [--thread N]
                           send a message as the captain (default to: all)
@@ -184,6 +186,50 @@ async function cmdGuard(args: string[]): Promise<void> {
   }
   // repo comes from the hook payload's cwd (falls back to process.cwd()).
   process.exitCode = await runGuard(agent);
+}
+
+async function cmdShow(repo: string, args: string[]): Promise<void> {
+  const { getTask } = await import("./tasks.ts");
+  const { changeSummary } = await import("./git.ts");
+  const id = args[0];
+  if (!id) throw new Error("usage: wardroom show <task-id>");
+  const task = getTask(repo, id.startsWith("task-") ? id : `task-${id}`);
+  if (!task) throw new Error(`no such task: ${id}`);
+
+  const CYAN = "\x1b[36m", DIM = "\x1b[2m", GREEN = "\x1b[32m", RED = "\x1b[31m", BOLD = "\x1b[1m", RESET = "\x1b[0m";
+  const w = process.stdout.write.bind(process.stdout);
+  w(`${BOLD}${task.id}${RESET} ${task.title}  ${DIM}[${task.status}${task.agent ? ` @${task.agent}` : ""}]${RESET}\n`);
+  if (task.result) w(`${DIM}${task.result}${RESET}\n`);
+  const stat = changeSummary(task.changes);
+  if (stat) w(`\n${CYAN}changed${RESET} ${stat}\n`);
+  for (const f of task.changes?.files ?? []) w(`  ${f.status} ${f.path}  ${DIM}+${f.added} -${f.deleted}${RESET}\n`);
+  if (task.diff) {
+    w("\n");
+    for (const line of task.diff.split("\n")) {
+      const c = line.startsWith("+") && !line.startsWith("+++") ? GREEN : line.startsWith("-") && !line.startsWith("---") ? RED : line.startsWith("@@") ? CYAN : DIM;
+      w(`${c}${line}${RESET}\n`);
+    }
+  } else {
+    w(`${DIM}(no diff captured)${RESET}\n`);
+  }
+}
+
+async function cmdChanges(repo: string): Promise<void> {
+  const { listTasks } = await import("./tasks.ts");
+  const { changeSummary } = await import("./git.ts");
+  const DIM = "\x1b[2m", CYAN = "\x1b[36m", RESET = "\x1b[0m";
+  const touched = listTasks(repo).filter((t) => (t.changes?.files.length ?? 0) > 0);
+  if (touched.length === 0) {
+    process.stdout.write("no recorded changes yet\n");
+    return;
+  }
+  for (const t of touched) {
+    process.stdout.write(
+      `${t.id}  ${t.title}  ${t.agent ? CYAN + "@" + t.agent + RESET + "  " : ""}${DIM}${changeSummary(t.changes)}${RESET}\n` +
+        `   ${DIM}${t.changes!.files.map((f) => `${f.status} ${f.path}`).join(", ")}${RESET}\n` +
+        `   ${DIM}wardroom show ${t.id}${RESET}\n`
+    );
+  }
 }
 
 async function cmdCompact(repo: string): Promise<void> {
@@ -443,6 +489,12 @@ async function main(): Promise<void> {
       return;
     case "compact":
       await cmdCompact(repoPath());
+      return;
+    case "show":
+      await cmdShow(repoPath(), args);
+      return;
+    case "changes":
+      await cmdChanges(repoPath());
       return;
     case "help":
     case "--help":

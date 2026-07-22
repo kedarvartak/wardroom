@@ -1,7 +1,8 @@
 import type { AgentEvent } from "./adapters/types.ts";
 import { compact } from "./compact.ts";
 import type { WardroomConfig } from "./config.ts";
-import { listTasks, requeueStaleClaims } from "./tasks.ts";
+import { changeSummary } from "./git.ts";
+import { getTask, listTasks, requeueStaleClaims } from "./tasks.ts";
 import { runWorker, type WorkerPhase } from "./worker.ts";
 import { writeSession } from "./writedown.ts";
 
@@ -99,7 +100,10 @@ function buildWritedown(repoPath: string, result: Omit<PoolResult, "writedownFil
     "",
     "## Outcomes",
     ...(result.outcomes.length > 0
-      ? result.outcomes.map((o) => `- [${o.status}] ${o.task} (${o.agent}): ${o.title} — ${o.summary.slice(0, 200)}`)
+      ? result.outcomes.map((o) => {
+          const stat = changeSummary(getTask(repoPath, o.task)?.changes);
+          return `- [${o.status}] ${o.task} (${o.agent}): ${o.title}${stat ? ` — ${stat}` : ""} — ${o.summary.slice(0, 160)}`;
+        })
       : ["- (no tasks ran)"]),
     "",
     "## Footprint drift",

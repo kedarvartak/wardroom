@@ -96,9 +96,15 @@ Other entry points:
 wardroom crew      list your agents and check each is installed/authenticated
 wardroom run --agents claude,codex ["<goal>"]
                    non-interactive: drain a board (or plan+run a goal) for CI
+wardroom changes   what each task changed (files, +/-); `show <task>` for the diff
 wardroom watch     live dashboard for hand-driven (MCP) sessions
 wardroom board / log / say / guard / compact / mcp
 ```
+
+Fire-and-forget is the point — you let the crew take the wheel. What keeps you
+in sync is that every task records exactly what it changed: `wardroom changes`
+lists it, `wardroom show <task>` prints the diff, and it lands in the session
+writedown. Transparency without gating the autonomy.
 
 `wardroom run` shows the whole crew at once — a pane per agent, the shared
 board, and the crosstalk between them:

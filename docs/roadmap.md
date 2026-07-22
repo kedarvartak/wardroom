@@ -15,6 +15,7 @@ Summary:
 | P4 | Planner mode (`plan/run "<goal>"`), cross-agent review, footprint-drift telemetry | Shipped |
 | P5 | Hardening: enforcement guard, lease heartbeats + presence, log/board compaction, token budgets, 1.0 package | Shipped |
 | P6 | Interactive conductor console: directed assignment, `delegate_task`, keep-alive session, conductor, `wardroom` REPL, `crew` | Shipped |
+| P7 | Change transparency: per-task change records (files, +/-, diff) surfaced via `changes` / `show` / board / writedown — stay in sync with the crew without gating autonomy | Shipped |
 
 ## History
 

@@ -7,7 +7,7 @@ import type { AgentEvent, LineParser } from "./adapters/types.ts";
 import type { WardroomConfig } from "./config.ts";
 import { claimFiles } from "./claims.ts";
 import { getContext } from "./context.ts";
-import { diffOf, footprintTelemetry } from "./git.ts";
+import { changeStat, diffOf, footprintTelemetry } from "./git.ts";
 import { getMessages } from "./messages.ts";
 import { heartbeat } from "./presence.ts";
 import {
@@ -18,6 +18,7 @@ import {
   failTask,
   listTasks,
   pendingReviewFor,
+  recordChanges,
   recordTelemetry,
   resolveReview,
   submitForReview,
@@ -339,6 +340,12 @@ export async function runWorker(
     if (!agentSummary || (agentOk && agentSummary === "exited cleanly")) {
       agentSummary = textTail.join(" ").slice(-500) || agentSummary || "(no output)";
     }
+
+    // Record exactly what the agent changed, whatever the outcome, so the human
+    // can always see it (and, later, roll it back).
+    const changes = changeStat(repoPath, task.files);
+    recordChanges(repoPath, task.id, changes, diffOf(repoPath, changes.files.map((f) => f.path)));
+    if (changes.files.length > 0) status(`${agentName}: ${task.id} changed ${changes.files.length} file(s) +${changes.added} -${changes.deleted}`);
 
     let outcome: "done" | "failed";
     let detail: string;

@@ -1,6 +1,7 @@
 import path from "path";
 import { activeClaims, claimFiles, releaseClaimsForTask, type ClaimConflict } from "./claims.ts";
 import { postEvent } from "./events.ts";
+import { changeSummary, type ChangeRecord } from "./git.ts";
 import {
   memoDir,
   normalizeAgent,
@@ -55,6 +56,8 @@ export type Task = {
   // and the subset that fell outside its declared footprint.
   actualFiles?: string[];
   drift?: string[];
+  // change record: exactly what this task changed, so the human stays in sync.
+  changes?: ChangeRecord;
 };
 
 type TasksState = { nextId: number; tasks: Task[] };
@@ -400,6 +403,25 @@ export function recordTelemetry(
   });
 }
 
+// Record what a task changed (files + line counts) and its diff, so the human
+// can see exactly what the agent did after the fact.
+export function recordChanges(
+  repoPath: string,
+  taskId: string,
+  changes: ChangeRecord,
+  diff?: string
+): void {
+  withLock(repoPath, "tasks", () => {
+    const state = loadState(repoPath);
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (task) {
+      task.changes = changes;
+      if (diff) task.diff = diff;
+      saveState(repoPath, state);
+    }
+  });
+}
+
 // Return a claimed task to the board (agent giving up without failing it) or
 // reset a failed task for retry.
 export function releaseTask(repoPath: string, agent: string, taskId: string): Task {
@@ -479,6 +501,10 @@ export function listTasks(repoPath: string, status?: TaskStatus): Task[] {
   return status ? state.tasks.filter((t) => t.status === status) : state.tasks;
 }
 
+export function getTask(repoPath: string, taskId: string): Task | undefined {
+  return withLock(repoPath, "tasks", () => loadState(repoPath).tasks.find((t) => t.id === taskId));
+}
+
 // Human/agent-readable board snapshot.
 export function renderBoard(repoPath: string): string {
   const tasks = listTasks(repoPath);
@@ -499,9 +525,13 @@ export function renderBoard(repoPath: string): string {
     const who = task.agent ? ` @${task.agent}` : "";
     const deps = task.dependsOn.length > 0 ? ` (after ${task.dependsOn.join(", ")})` : "";
     const files = task.files.length > 0 ? ` [${task.files.join(", ")}]` : "";
-    lines.push(`${icon[task.status]} ${task.id}${who} — ${task.title}${deps}${files}`);
+    const stat = changeSummary(task.changes);
+    lines.push(`${icon[task.status]} ${task.id}${who} — ${task.title}${deps}${files}${stat ? `  (${stat})` : ""}`);
     if (task.result) {
       lines.push(`    ↳ ${task.result}`);
+    }
+    if (task.changes && task.changes.files.length > 0) {
+      lines.push(`    changed: ${task.changes.files.map((f) => `${f.status} ${f.path}`).join(", ")}`);
     }
   }
   return lines.join("\n");
