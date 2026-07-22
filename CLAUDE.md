@@ -23,8 +23,13 @@ claims, and recent events (with a cursor for later polls).
   work, do NOT edit them anyway.
 - Renamed a symbol, changed an API, moved a file? `post_event` so other
   agents hear about it now, not at review time.
-- Poll `get_events(since_seq=<your cursor>)` between tasks and before editing
-  shared surfaces.
+- Need something from a specific agent? `send_message(kind="question")` and
+  reply in the same `thread_id`. Address the human as `captain` for
+  decisions that are theirs. Never guess what a teammate did when you can ask.
+- Poll `get_events(since_seq=<your cursor>)` and `get_messages(agent="claude")`
+  between tasks and before editing shared surfaces. Answer questions
+  addressed to you before starting new work — an unanswered question blocks
+  a teammate.
 - Finish with `complete_task` (result other agents can build on) or
   `fail_task` / `release_task`. Never stop while still holding a claim.
 

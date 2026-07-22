@@ -11,10 +11,15 @@ join            get_context(repo_path)
 plan (once)     plan_tasks(...)          ← one agent (or the human) decomposes
                      │
 work            ┌─► claim_next_task ──► edit ──► verify ──► complete_task ─┐
-                └──────────────────── get_events(since_seq) ◄──────────────┘
+                └── get_events(since_seq) + get_messages(agent=you) ◄──────┘
+                     │
+talk            send_message(to=agent|captain|all, kind=question|info|...)
                      │
 leave           write_session (/writedown) when the user asks
 ```
+
+The human can watch all of this live with `wardroom watch` and reply to
+questions with `wardroom say --to <agent> "..." --thread <n>`.
 
 ### 1. Join: `get_context`
 Before planning or touching any file. It returns the latest writedown, the
@@ -44,8 +49,14 @@ Decompose the work into tasks that are **file-disjoint wherever possible**:
   everyone else.
 - Made a change other agents must know about mid-flight (renamed a symbol,
   changed an API, moved a file)? `post_event` immediately.
+- Need something from a specific agent? `send_message` with
+  `kind="question"` — do not guess what another agent did when you can ask.
+  Reply into the same `thread_id`. Address the human as `captain` when a
+  decision is theirs to make; they answer via `wardroom say`.
 - Between tasks — and before editing any shared surface — `get_events` with
-  your last cursor.
+  your last cursor AND `get_messages(agent=<you>)` for your inbox. An
+  unanswered question addressed to you blocks a teammate: answer it before
+  starting new work.
 - Finish with `complete_task` and a result another agent can build on
   ("added POST /auth/refresh in src/api/auth.ts; tests in test/auth.test.ts
   pass"), or `fail_task` / `release_task` so the work returns to the board.

@@ -63,11 +63,24 @@ Three layers, all state in plain files under `.memo/` in your repo:
 
 ## Current state
 
-Today wardroom is the coordination core plus memory, exposed as an MCP
-server that Claude Code, Codex, and Gemini CLI connect to from their own
-terminals. The single-terminal harness is being built on top of it — the
-full product plan, architecture, and phased delivery with acceptance
-criteria is in [docs/plan.md](docs/plan.md).
+Shipped today: the coordination core, memory, agent-to-agent messaging, and
+the first slice of the harness — a live terminal dashboard. Agents connect
+over MCP from their own CLIs; you watch and steer from one terminal:
+
+```
+wardroom watch     live dashboard: board, claims, crosstalk, events, status
+wardroom board     print the task board
+wardroom log -f    merged events + messages timeline, follow mode
+wardroom say "answer" --to claude --thread 4
+                   reply to an agent's question as the captain
+wardroom mcp       the stdio MCP server the agent CLIs connect to
+```
+
+Agents ask each other questions with `send_message(kind="question")`,
+answer in threads, and escalate decisions to you by addressing `captain` —
+all of it visible in the crosstalk pane of `wardroom watch`. The headless
+worker pool that runs agents from this same terminal is next; the full plan
+with phases and acceptance criteria is in [docs/plan.md](docs/plan.md).
 
 ![Roadmap](docs/diagrams/roadmap.png)
 
@@ -82,6 +95,7 @@ criteria is in [docs/plan.md](docs/plan.md).
 | `get_board` | Render the full task board |
 | `claim_files` / `release_files` / `check_files` | Advisory TTL file leases |
 | `post_event` / `get_events` | Broadcast and cursor-poll the shared event stream |
+| `send_message` / `get_messages` | Directed, threaded agent-to-agent (and agent-to-captain) mail |
 | `write_session` / `read_memo` | Durable session writedowns |
 
 ## Install and wire
@@ -96,7 +110,7 @@ Codex `~/.codex/config.json`, Gemini `~/.gemini/settings.json`):
 ```json
 {
   "mcpServers": {
-    "wardroom": { "command": "npx", "args": ["wardroom"] }
+    "wardroom": { "command": "npx", "args": ["wardroom", "mcp"] }
   }
 }
 ```

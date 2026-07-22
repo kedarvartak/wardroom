@@ -20,7 +20,7 @@ Requires Node >= 22.
   "mcpServers": {
     "wardroom": {
       "command": "npx",
-      "args": ["wardroom"]
+      "args": ["wardroom", "mcp"]
     }
   }
 }
@@ -64,7 +64,7 @@ coordination and write-back — in `~/.codex/config.json`:
   "mcpServers": {
     "wardroom": {
       "command": "npx",
-      "args": ["wardroom"]
+      "args": ["wardroom", "mcp"]
     }
   }
 }
@@ -108,5 +108,21 @@ it works underneath.
 | `get_board` | Render the full task board |
 | `claim_files` / `release_files` / `check_files` | Advisory TTL file leases |
 | `post_event` / `get_events` | Broadcast + cursor-poll the shared event stream |
+| `send_message` / `get_messages` | Directed, threaded messages between agents and the captain |
 | `write_session` | Capture a structured session writedown (`/writedown`) |
 | `read_memo` | Reload prior writedowns into a fresh chat (`/readmemo`) |
+
+## The wardroom CLI
+
+The same package installs the `wardroom` command for the human:
+
+```
+wardroom watch     live dashboard (board, claims, crosstalk, events)
+wardroom board     print the task board and exit
+wardroom log -f    merged events + messages timeline, follow mode
+wardroom say "<msg>" [--to agent] [--kind question|info] [--thread N]
+wardroom mcp       the stdio MCP server (what the CLI configs invoke)
+```
+
+Run them from the repo root; state lives in `./.memo/`. Typical setup: your
+agent CLIs in their own terminals, `wardroom watch` in one more.

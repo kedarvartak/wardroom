@@ -3,8 +3,8 @@
   "version": "0.2.0",
   "description": "One terminal harness for parallel AI coding agents on one checkout. Claude, Codex, and Gemini plan, talk, and build together - no worktrees, no merge conflicts.",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/mcp.js",
+  "types": "dist/mcp.d.ts",
   "files": [
     "dist",
     "scripts",
@@ -14,12 +14,12 @@
     "LICENSE"
   ],
   "bin": {
-    "wardroom": "dist/index.js"
+    "wardroom": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "node --watch --experimental-strip-types src/index.ts",
+    "start": "node dist/cli.js mcp",
+    "dev": "node --watch --experimental-strip-types src/cli.ts mcp",
     "test": "node --test --experimental-strip-types test/*.test.ts",
     "prepublishOnly": "npm run build"
   },

@@ -17,6 +17,9 @@ get_context(repo_path="<this repo's absolute path>")
   On conflict, another agent holds those files — take other work instead.
 - Announce breaking mid-flight changes with `post_event`; poll
   `get_events(since_seq=<cursor>)` between tasks.
+- Ask other agents with `send_message(kind="question")`, reply in the same
+  `thread_id`, and check `get_messages(agent="gemini")` between tasks.
+  Address the human as `captain` for decisions that are theirs.
 - Finish every task with `complete_task`, `fail_task`, or `release_task` —
   never stop while holding a claim.
 

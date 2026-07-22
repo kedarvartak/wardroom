@@ -21,6 +21,7 @@ import {
   releaseTask,
   renderBoard,
 } from "./tasks.ts";
+import { getMessages, sendMessage, MESSAGE_KINDS } from "./messages.ts";
 import { readMemo, writeSession } from "./writedown.ts";
 
 // wardroom v0.2 — a coordination server for parallel AI coding agents
@@ -256,6 +257,52 @@ const tools = [
       required: ["repo_path"],
     },
   },
+  // ── messages ───────────────────────────────────────────────────────────────
+  {
+    name: "send_message",
+    description:
+      "Send a directed message to another agent, to 'captain' (the human), or to 'all'. Use kind='question' when you need an answer (the asker shows as blocked until someone replies in the thread); 'info' for heads-ups; 'review-request'/'review-reply' for cross-agent review. Reply to a conversation by passing its thread_id.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...repoPathProp,
+        from: { type: "string", description: "Your agent name." },
+        to: { type: "string", description: "Recipient: an agent name, 'captain', or 'all'." },
+        body: { type: "string", description: "The message. Multi-line is fine." },
+        kind: {
+          type: "string",
+          enum: [...MESSAGE_KINDS],
+          description: "Message kind. Defaults to 'info'.",
+        },
+        thread_id: {
+          type: "integer",
+          description: "Reply into an existing thread (the thread number from the message you are answering).",
+        },
+        blocking: {
+          type: "boolean",
+          description: "Questions only: you cannot proceed until answered. Surfaces prominently.",
+        },
+      },
+      required: ["repo_path", "from", "to", "body"],
+    },
+  },
+  {
+    name: "get_messages",
+    description:
+      "Read your inbox (messages addressed to you or to 'all'). By default returns unread only and marks them read. Pass thread_id to read a whole conversation. Check your inbox between tasks and before editing shared surfaces.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...repoPathProp,
+        agent: { type: "string", description: "Your agent name (or 'captain')." },
+        unread_only: { type: "boolean", description: "Default true." },
+        limit: { type: "integer", description: "Max messages to return. Defaults to 20." },
+        thread_id: { type: "integer", description: "Return this whole thread instead of the inbox." },
+        mark_read: { type: "boolean", description: "Advance your read cursor. Default true." },
+      },
+      required: ["repo_path", "agent"],
+    },
+  },
   // ── memory (writedowns) ────────────────────────────────────────────────────
   {
     name: "write_session",
@@ -444,6 +491,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         parsed.filter_agent,
         parsed.filter_type
       );
+    } else if (name === "send_message") {
+      const parsed = z
+        .object({
+          repo_path: z.string(),
+          from: z.string(),
+          to: z.string(),
+          body: z.string(),
+          kind: z.enum(MESSAGE_KINDS).optional(),
+          thread_id: z.number().int().positive().optional(),
+          blocking: z.boolean().optional(),
+        })
+        .parse(args);
+      result = sendMessage(
+        parsed.repo_path,
+        parsed.from,
+        parsed.to,
+        parsed.body,
+        parsed.kind ?? "info",
+        parsed.thread_id,
+        parsed.blocking ?? false
+      );
+    } else if (name === "get_messages") {
+      const parsed = z
+        .object({
+          repo_path: z.string(),
+          agent: z.string(),
+          unread_only: z.boolean().optional(),
+          limit: z.number().int().positive().optional(),
+          thread_id: z.number().int().positive().optional(),
+          mark_read: z.boolean().optional(),
+        })
+        .parse(args);
+      result = getMessages(
+        parsed.repo_path,
+        parsed.agent,
+        parsed.unread_only ?? true,
+        parsed.limit ?? 20,
+        parsed.thread_id,
+        parsed.mark_read ?? true
+      );
     } else if (name === "write_session") {
       const parsed = z
         .object({
@@ -487,5 +574,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+export async function runMcp(): Promise<void> {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

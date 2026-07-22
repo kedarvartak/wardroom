@@ -1,5 +1,6 @@
 import { activeClaims } from "./claims.ts";
 import { getEvents } from "./events.ts";
+import { crosstalk, openQuestions } from "./messages.ts";
 import { listTasks } from "./tasks.ts";
 import { listWritedowns } from "./writedown.ts";
 
@@ -51,6 +52,27 @@ export function getContext(repoPath: string, lastEvents = 15): string {
       sections.push(
         `- ${claim.agent} holds ${claim.paths.join(", ")} — ${claim.reason} (expires ${claim.expires})`
       );
+    }
+    sections.push("");
+  }
+
+  const talk = crosstalk(repoPath, 10);
+  sections.push("## Crosstalk (recent messages)");
+  if (talk.length === 0) {
+    sections.push("", "_None. Message other agents with send_message; read yours with get_messages._", "");
+  } else {
+    sections.push("");
+    for (const m of talk) {
+      const kind = m.kind === "info" ? "" : ` [${m.kind}]`;
+      sections.push(`- [t${m.thread}] ${m.from} -> ${m.to}${kind}: ${m.body}`);
+    }
+    sections.push("", "_Call get_messages(agent=<you>) for your inbox; reply with thread_id._", "");
+  }
+  const unanswered = openQuestions(repoPath);
+  if (unanswered.length > 0) {
+    sections.push("### Unanswered questions");
+    for (const q of unanswered) {
+      sections.push(`- [t${q.thread}] ${q.from} asked ${q.to}: ${q.body}`);
     }
     sections.push("");
   }
