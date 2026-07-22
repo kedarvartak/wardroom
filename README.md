@@ -63,9 +63,10 @@ Three layers, all state in plain files under `.memo/` in your repo:
 
 ## Current state
 
-Shipped today: the coordination core, memory, agent-to-agent messaging, and
-the harness bridge — a pool of headless agents draining one board
-concurrently, rendered live in a single terminal.
+The full harness (v1.0): the coordination core, memory, agent-to-agent
+messaging, and a pool of headless agents draining one board concurrently —
+planning, reviewing each other's work, and recovering from crashes — rendered
+live in a single terminal.
 
 ```
 wardroom plan "add JWT auth with refresh tokens"
@@ -118,8 +119,13 @@ escalate decisions to you by addressing `captain`. With review enabled
 different agent before it counts as done — a caught bug reopens the task with
 the reviewer's notes and the crew fixes it, no operator needed. Tasks
 orphaned by a crashed run are recovered on the next run, and footprint drift
-(declared-but-untouched files) is reported to sharpen future planning. What
-remains is hardening for 1.0 — Phase 5 of [docs/plan.md](docs/plan.md).
+(declared-but-untouched files) is reported to sharpen future planning.
+
+Leases are advisory by default; an optional `wardroom guard` PreToolUse hook
+turns them into hard enforcement for interactive sessions. A token/cost
+`budget` in `wardroom.json` stops a run cleanly when hit, the working logs
+compact automatically, and `presence` shows who is on the bridge. The full
+design, phases, and acceptance criteria are in [docs/plan.md](docs/plan.md).
 
 ![Roadmap](docs/diagrams/roadmap.png)
 

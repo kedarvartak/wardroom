@@ -5,9 +5,11 @@ import { parseGeminiLine } from "./adapters/gemini.ts";
 import { spawnCli } from "./adapters/runner.ts";
 import type { AgentEvent, LineParser } from "./adapters/types.ts";
 import type { WardroomConfig } from "./config.ts";
+import { claimFiles } from "./claims.ts";
 import { getContext } from "./context.ts";
 import { diffOf, footprintTelemetry } from "./git.ts";
 import { getMessages } from "./messages.ts";
+import { heartbeat } from "./presence.ts";
 import {
   anyReviewsOutstanding,
   claimNextTask,
@@ -38,6 +40,10 @@ const PARSERS: Record<string, LineParser> = {
   gemini: parseGeminiLine,
 };
 
+// Lease-renewal cadence and duration for in-flight tasks.
+const RENEW_MS = 5 * 60_000;
+const TASK_LEASE_MINUTES = 30;
+
 export type WorkerPhase = "claimed" | "working" | "verifying" | "done" | "failed" | "waiting" | "idle";
 
 export type WorkerHooks = {
@@ -66,6 +72,9 @@ export type WorkerResult = {
 export type WorkerOptions = {
   // Other agents in this run, eligible to review this worker's tasks.
   peers?: string[];
+  // Cooperative stop: checked before each new claim. When it returns true the
+  // worker finishes nothing new and returns (in-flight work already completed).
+  shouldStop?: () => boolean;
 };
 
 function buildPrompt(repoPath: string, agent: string, task: Task): string {
@@ -201,6 +210,11 @@ export async function runWorker(
   };
 
   while (result.completed + result.failed < maxTasks) {
+    if (options.shouldStop?.()) {
+      result.stopped = "budget reached";
+      break;
+    }
+
     // 1. Review work assigned to me takes priority over claiming new tasks —
     //    a task waiting on review is blocking its author's pipeline.
     if (reviewEnabled) {
@@ -268,23 +282,38 @@ export async function runWorker(
     const task = claim.task;
     status(`${agentName}: claimed ${task.id} - ${task.title}`);
     phase(agentName, "claimed", task);
+    heartbeat(repoPath, agentName, `working ${task.id}: ${task.title}`);
 
     const prompt = buildPrompt(repoPath, agentName, task);
     phase(agentName, "working", task);
     const spawned = spawnCli(agentConfig.bin, agentConfig.args, prompt, repoPath, timeoutMs, parser);
 
+    // Heartbeat: renew the task's file lease and presence periodically so a
+    // long-running task can't have its lease lapse and its work requeued.
+    const renew = setInterval(() => {
+      heartbeat(repoPath, agentName, `working ${task.id}`);
+      if (task.files.length > 0) {
+        claimFiles(repoPath, agentName, task.files, `task ${task.id}: ${task.title}`, TASK_LEASE_MINUTES, task.id);
+      }
+    }, RENEW_MS);
+    if (typeof renew.unref === "function") renew.unref();
+
     let agentOk = false;
     let agentSummary = "";
     const textTail: string[] = [];
-    for await (const event of spawned.events) {
-      hooks.onEvent?.(agentName, task, event);
-      if (event.kind === "text") {
-        textTail.push(event.text);
-        if (textTail.length > 5) textTail.shift();
-      } else if (event.kind === "result") {
-        agentOk = event.ok;
-        agentSummary = event.summary;
+    try {
+      for await (const event of spawned.events) {
+        hooks.onEvent?.(agentName, task, event);
+        if (event.kind === "text") {
+          textTail.push(event.text);
+          if (textTail.length > 5) textTail.shift();
+        } else if (event.kind === "result") {
+          agentOk = event.ok;
+          agentSummary = event.summary;
+        }
       }
+    } finally {
+      clearInterval(renew);
     }
     // Adapters without a native result event synthesize a generic summary from
     // the exit code; the agent's own last words are more useful when we have them.

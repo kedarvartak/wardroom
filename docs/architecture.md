@@ -120,8 +120,17 @@ changed). This is the first call every agent makes.
   task is submitted for review by a different agent (status `review`); the
   reviewer approves (-> done) or requests changes (-> reopened with notes,
   capped attempts). A task's author never reviews its own work.
+- `guard.ts` — the enforcement hook (`wardroom guard`): reads a tool call on
+  stdin and denies edits to files another agent leases. Fail-open by design.
+- `compact.ts` — archives old events/messages and terminal tasks under
+  `.memo/archive/`, preserving seq/cursor and id-counter invariants. Runs at
+  pool start and via `wardroom compact`.
+- `presence.ts` — who is active now (heartbeats), shown on the dashboard;
+  workers also renew their file lease during long tasks so it can't lapse.
+- Token/cost budgets — the pool sums usage events; a cap stops new claims
+  (in-flight tasks finish) and the run ends with a writedown.
 - `cli.ts` — `plan`/`run "<goal>"` (planner + approve), `run --agents` (pool),
-  `watch`, `board`, `log`, `say`, `mcp`.
+  `watch`, `board`, `log`, `say`, `guard`, `compact`, `mcp`.
 
 ## What was removed
 

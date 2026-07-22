@@ -161,6 +161,42 @@ the verification gate, and the per-task timeout:
   task is reviewed by a *different* agent before it counts as done — so
   review needs 2+ agents in the run, and an author never reviews its own work.
 - `planner`: which agent decomposes goals in `wardroom plan`/`run "<goal>"`.
+- `budget`: `{ "tokens": N, "usd": N }` per-session cap. When either is
+  reached, workers stop claiming new tasks (in-flight tasks finish) and the
+  run ends with a writedown. Omit for no cap.
+
+## Enforcement (optional)
+
+Leases are advisory by default — cooperating agents check before editing. To
+*enforce* them for an interactive Claude Code session, add a `PreToolUse` hook
+that runs the guard before every edit. It blocks edits to files another agent
+has leased. In that project's `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "npx wardroom guard --agent claude" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Set `--agent` to this session's agent name (or export `WARDROOM_AGENT`). The
+guard fails open: any error allows the edit, so a guard bug can never wedge a
+session. Headless pool runs enforce leases structurally already (atomic
+claims), so the hook is for interactive sessions.
+
+## Housekeeping
+
+`wardroom run` compacts the working logs automatically at the start of each
+run. To compact on demand, `wardroom compact` archives old events, messages,
+and terminal tasks under `.memo/archive/`, keeping a recent tail live.
 
 `verify` runs after every file-touching task; the task only counts as done
 if the command passes — completion is gated on verification, not on the

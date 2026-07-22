@@ -8,11 +8,12 @@ This document is the build plan: vision, architecture, workstreams, phased
 delivery with acceptance criteria, risks. Diagrams referenced here live in
 `docs/diagrams/`.
 
-Status: Phases 0-4 complete — core, messaging, the `wardroom` CLI, all three
-adapters, the concurrent worker pool with a live multiplexed view, plus
-planner mode (`wardroom plan/run "<goal>"`), cross-agent review, and
-footprint-drift telemetry. Phase 5 (hardening + 1.0) planned. Last updated
-2026-07-22.
+Status: Phases 0-5 complete — the full harness plus hardening. Core,
+messaging, the `wardroom` CLI, all three adapters, the concurrent worker pool
+with a live multiplexed view, planner mode, cross-agent review, footprint
+telemetry, and (Phase 5) the enforcement guard, log/board compaction, lease
+heartbeats + presence, token/cost budgets, and a 1.0 publishable package.
+Last updated 2026-07-22.
 
 ---
 

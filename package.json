@@ -1,13 +1,17 @@
 {
   "name": "wardroom",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "One terminal harness for parallel AI coding agents on one checkout. Claude, Codex, and Gemini plan, talk, and build together - no worktrees, no merge conflicts.",
   "type": "module",
   "main": "dist/mcp.js",
   "types": "dist/mcp.d.ts",
+  "homepage": "https://github.com/kedarvartak/wardroom#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/kedarvartak/wardroom.git" },
+  "bugs": { "url": "https://github.com/kedarvartak/wardroom/issues" },
   "files": [
     "dist",
     "scripts",
+    "docs",
     "CLAUDE.md",
     "GEMINI.md",
     "README.md",

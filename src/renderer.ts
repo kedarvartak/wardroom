@@ -3,6 +3,7 @@ import { activeClaims } from "./claims.ts";
 import { getEvents } from "./events.ts";
 import { crosstalk, openQuestions, unreadCount } from "./messages.ts";
 import type { PoolState } from "./pool.ts";
+import { getPresence } from "./presence.ts";
 import { listTasks, type TaskStatus } from "./tasks.ts";
 
 // ── terminal dashboard ────────────────────────────────────────────────────────
@@ -38,6 +39,12 @@ export function renderDashboard(repoPath: string, width = 78): string {
   const lines: string[] = [];
   const now = new Date().toISOString().slice(11, 19);
   lines.push(`${BOLD}WARDROOM${RESET}  ${path.basename(repoPath)}  ${DIM}${now} UTC${RESET}`);
+  const online = getPresence(repoPath).filter((p) => p.online);
+  if (online.length > 0) {
+    lines.push(
+      `${DIM}online:${RESET} ` + online.map((p) => `${CYAN}${p.agent}${RESET} ${DIM}(${p.activity})${RESET}`).join("  ")
+    );
+  }
   lines.push("");
 
   // board

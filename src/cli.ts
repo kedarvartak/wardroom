@@ -29,6 +29,9 @@ commands:
   log [-n N] [--follow]   merged events + messages timeline
   say <msg> [--to AGENT] [--kind KIND] [--thread N]
                           send a message as the captain (default to: all)
+  guard --agent NAME      enforcement hook: reads a tool call on stdin and
+                          blocks edits to files another agent has leased
+  compact                 archive old events/messages/tasks under .memo/archive
   help                    show this help
 
 The repo is the current working directory. State lives in ./.memo/.
@@ -126,6 +129,26 @@ async function cmdLog(repo: string, args: string[]): Promise<void> {
   }, 500);
 }
 
+async function cmdGuard(args: string[]): Promise<void> {
+  const { runGuard } = await import("./guard.ts");
+  const agent = flagValue(args, "--agent") ?? process.env.WARDROOM_AGENT;
+  if (!agent) {
+    throw new Error("usage: wardroom guard --agent <name>  (or set WARDROOM_AGENT)");
+  }
+  // repo comes from the hook payload's cwd (falls back to process.cwd()).
+  process.exitCode = await runGuard(agent);
+}
+
+async function cmdCompact(repo: string): Promise<void> {
+  const { compact } = await import("./compact.ts");
+  const r = compact(repo, { minToCompact: 0 });
+  process.stdout.write(
+    `compacted: events ${r.events.archived} archived / ${r.events.kept} kept; ` +
+      `messages ${r.messages.archived} archived / ${r.messages.kept} kept; ` +
+      `tasks ${r.tasks.archived} archived / ${r.tasks.kept} kept\n`
+  );
+}
+
 function cmdSay(repo: string, args: string[]): void {
   const to = flagValue(args, "--to") ?? "all";
   const kind = (flagValue(args, "--kind") ?? "info") as MessageKind;
@@ -145,6 +168,9 @@ function poolSummary(result: {
   reviewed: number;
   requeued: string[];
   driftTasks: number;
+  tokens: number;
+  costUsd: number;
+  budgetStopped: boolean;
   durationMs: number;
   writedownFile?: string;
 }, agents: string[]): string {
@@ -153,6 +179,8 @@ function poolSummary(result: {
     (result.reviewed ? `; ${result.reviewed} review(s)` : "") +
     (result.requeued.length ? `; requeued ${result.requeued.length} orphaned` : "") +
     (result.driftTasks ? `; ${result.driftTasks} task(s) with footprint drift` : "") +
+    (result.tokens ? `; ${result.tokens} tokens${result.costUsd ? ` ($${result.costUsd.toFixed(4)})` : ""}` : "") +
+    (result.budgetStopped ? "; STOPPED at budget cap" : "") +
     (result.writedownFile ? `\nwritedown: ${result.writedownFile}` : "")
   );
 }
@@ -355,6 +383,12 @@ async function main(): Promise<void> {
       return;
     case "say":
       cmdSay(repoPath(), args);
+      return;
+    case "guard":
+      await cmdGuard(args);
+      return;
+    case "compact":
+      await cmdCompact(repoPath());
       return;
     case "help":
     case "--help":

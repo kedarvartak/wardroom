@@ -30,6 +30,9 @@ export type WardroomConfig = {
   review: ReviewPolicy;
   // Which agent decomposes goals in `wardroom plan`/`run "<goal>"`.
   planner: string;
+  // Per-session budget. When exceeded, workers stop claiming NEW tasks (in-flight
+  // tasks finish), and the run ends with a writedown. Omit for no cap.
+  budget?: { tokens?: number; usd?: number };
 };
 
 const DEFAULTS: WardroomConfig = {

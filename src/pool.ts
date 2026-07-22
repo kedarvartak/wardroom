@@ -1,4 +1,5 @@
 import type { AgentEvent } from "./adapters/types.ts";
+import { compact } from "./compact.ts";
 import type { WardroomConfig } from "./config.ts";
 import { listTasks, requeueStaleClaims } from "./tasks.ts";
 import { runWorker, type WorkerPhase } from "./worker.ts";
@@ -41,6 +42,9 @@ export type PoolResult = {
   reviewed: number;
   requeued: string[];
   driftTasks: number;
+  tokens: number;
+  costUsd: number;
+  budgetStopped: boolean;
   outcomes: { agent: string; task: string; title: string; status: "done" | "failed"; summary: string }[];
   durationMs: number;
   writedownFile?: string;
@@ -86,6 +90,8 @@ function buildWritedown(repoPath: string, result: Omit<PoolResult, "writedownFil
     "## Summary",
     `${result.completed} task(s) done, ${result.failed} failed in ${Math.round(result.durationMs / 1000)}s` +
       (result.reviewed > 0 ? `; ${result.reviewed} cross-agent review(s)` : "") +
+      (result.tokens > 0 ? `; ${result.tokens} tokens${result.costUsd ? ` ($${result.costUsd.toFixed(4)})` : ""}` : "") +
+      (result.budgetStopped ? "; STOPPED at budget cap (tasks may remain)" : "") +
       (result.requeued.length > 0 ? `; requeued ${result.requeued.length} orphaned task(s) at start` : ""),
     "",
     "## Outcomes",
@@ -119,6 +125,8 @@ export async function runPool(
     }
   }
 
+  // Keep the working logs bounded before a long run appends to them.
+  compact(repoPath);
   const requeued = requeueStaleClaims(repoPath);
 
   const panes = new Map<string, AgentPane>();
@@ -127,6 +135,25 @@ export async function runPool(
   }
   const state: PoolState = { panes: [...panes.values()], startedAt: Date.now() };
   const notify = () => hooks.onChange?.(state);
+
+  // Budget tracking. When a cap is hit, workers stop claiming NEW tasks; work
+  // already in flight finishes, then the run ends with a writedown.
+  let tokens = 0;
+  let costUsd = 0;
+  let budgetStopped = false;
+  const overBudget = () => {
+    if (!config.budget) return false;
+    if (config.budget.tokens !== undefined && tokens >= config.budget.tokens) return true;
+    if (config.budget.usd !== undefined && costUsd >= config.budget.usd) return true;
+    return false;
+  };
+  const shouldStop = () => {
+    if (overBudget()) {
+      budgetStopped = true;
+      return true;
+    }
+    return false;
+  };
 
   let sweep: ReturnType<typeof setInterval> | undefined;
   if (options.sweepMs && options.sweepMs > 0) {
@@ -161,14 +188,20 @@ export async function runPool(
               const pane = panes.get(agent)!;
               if (event.kind === "text") pushLine(pane, event.text);
               else if (event.kind === "tool") pushLine(pane, event.detail);
-              else if (event.kind === "usage" && event.tokens) pane.tokens += event.tokens;
+              else if (event.kind === "usage") {
+                if (event.tokens) {
+                  pane.tokens += event.tokens;
+                  tokens += event.tokens;
+                }
+                if (event.costUsd) costUsd += event.costUsd;
+              }
               hooks.onLine?.(agent, task.id, event);
               notify();
             },
             onStatus: hooks.onStatus,
           },
           options.maxTasksPerAgent ?? Infinity,
-          { peers: agentNames.filter((peer) => peer !== name) }
+          { peers: agentNames.filter((peer) => peer !== name), shouldStop }
         )
       )
     );
@@ -191,6 +224,9 @@ export async function runPool(
       reviewed: results.reduce((sum, r) => sum + r.reviewed, 0),
       requeued,
       driftTasks,
+      tokens,
+      costUsd,
+      budgetStopped,
       outcomes,
       durationMs: Date.now() - state.startedAt,
     };
