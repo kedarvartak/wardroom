@@ -38,7 +38,9 @@ export type PoolResult = {
   agents: string[];
   completed: number;
   failed: number;
+  reviewed: number;
   requeued: string[];
+  driftTasks: number;
   outcomes: { agent: string; task: string; title: string; status: "done" | "failed"; summary: string }[];
   durationMs: number;
   writedownFile?: string;
@@ -69,18 +71,30 @@ function pushLine(pane: AgentPane, text: string): void {
   if (pane.lines.length > PANE_LINES) pane.lines.shift();
 }
 
+// Per-task footprint drift lines for the writedown: which declared paths were
+// never actually touched (over-declaration), the signal for tuning planning.
+function driftLines(repoPath: string): string[] {
+  return listTasks(repoPath)
+    .filter((t) => (t.drift?.length ?? 0) > 0)
+    .map((t) => `- ${t.id} (${t.title}): declared but untouched — ${t.drift!.join(", ")}`);
+}
+
 function buildWritedown(repoPath: string, result: Omit<PoolResult, "writedownFile">): string {
   const lines = [
     `# Pool session — ${result.agents.join(", ")}`,
     "",
     "## Summary",
     `${result.completed} task(s) done, ${result.failed} failed in ${Math.round(result.durationMs / 1000)}s` +
+      (result.reviewed > 0 ? `; ${result.reviewed} cross-agent review(s)` : "") +
       (result.requeued.length > 0 ? `; requeued ${result.requeued.length} orphaned task(s) at start` : ""),
     "",
     "## Outcomes",
     ...(result.outcomes.length > 0
       ? result.outcomes.map((o) => `- [${o.status}] ${o.task} (${o.agent}): ${o.title} — ${o.summary.slice(0, 200)}`)
       : ["- (no tasks ran)"]),
+    "",
+    "## Footprint drift",
+    ...(driftLines(repoPath).length > 0 ? driftLines(repoPath) : ["- none — declared footprints matched what was touched"]),
     "",
     "## Current state",
     `Board: ${listTasks(repoPath, "done").length} done, ${listTasks(repoPath, "failed").length} failed, ` +
@@ -153,7 +167,8 @@ export async function runPool(
             },
             onStatus: hooks.onStatus,
           },
-          options.maxTasksPerAgent ?? Infinity
+          options.maxTasksPerAgent ?? Infinity,
+          { peers: agentNames.filter((peer) => peer !== name) }
         )
       )
     );
@@ -168,11 +183,14 @@ export async function runPool(
       }))
     );
 
+    const driftTasks = listTasks(repoPath).filter((t) => (t.drift?.length ?? 0) > 0).length;
     const result: PoolResult = {
       agents: agentNames,
       completed: results.reduce((sum, r) => sum + r.completed, 0),
       failed: results.reduce((sum, r) => sum + r.failed, 0),
+      reviewed: results.reduce((sum, r) => sum + r.reviewed, 0),
       requeued,
+      driftTasks,
       outcomes,
       durationMs: Date.now() - state.startedAt,
     };

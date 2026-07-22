@@ -111,7 +111,16 @@ changed). This is the first call every agent makes.
   captures a writedown on exit.
 - `renderer.ts` — pure state-to-string views: `renderPool` (live multiplexed
   panes + board + crosstalk + status) and `renderDashboard`/`renderLog`.
-- `cli.ts` — `run` (live TTY panes or `--no-tty` interleaved lines),
+- `planner.ts` — invokes the planner agent headlessly with the goal and a
+  repo map; parses its JSON task list into a proposed board for the human to
+  approve/edit/regenerate before it is committed.
+- `git.ts` — footprint telemetry (declared-vs-touched, scoped to each task's
+  own footprint so it is attribution-safe under concurrency) and review diffs.
+- Cross-agent review (in `worker.ts`/`tasks.ts`): when enabled, a finished
+  task is submitted for review by a different agent (status `review`); the
+  reviewer approves (-> done) or requests changes (-> reopened with notes,
+  capped attempts). A task's author never reviews its own work.
+- `cli.ts` — `plan`/`run "<goal>"` (planner + approve), `run --agents` (pool),
   `watch`, `board`, `log`, `say`, `mcp`.
 
 ## What was removed

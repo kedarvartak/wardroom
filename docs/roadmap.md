@@ -12,7 +12,7 @@ Summary:
 | P1 | Directed agent messaging (threads, questions, captain) and the CLI skeleton: `wardroom watch\|board\|log\|say\|mcp` | Shipped |
 | P2 | Adapters for claude/codex/gemini and the single-worker headless loop (`wardroom run`) | Shipped |
 | P3 | Multi-agent live sessions: concurrent worker pool, multiplexed renderer, crash recovery, exit writedown | Shipped |
-| P4 | Planner mode, cross-agent review policy, footprint-drift telemetry | Planned |
+| P4 | Planner mode (`plan/run "<goal>"`), cross-agent review, footprint-drift telemetry | Shipped |
 | P5 | Hardening: enforcement hooks, heartbeats, compaction, budgets, 1.0 on npm | Planned |
 
 ## History

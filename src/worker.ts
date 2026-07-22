@@ -6,8 +6,21 @@ import { spawnCli } from "./adapters/runner.ts";
 import type { AgentEvent, LineParser } from "./adapters/types.ts";
 import type { WardroomConfig } from "./config.ts";
 import { getContext } from "./context.ts";
+import { diffOf, footprintTelemetry } from "./git.ts";
 import { getMessages } from "./messages.ts";
-import { claimNextTask, completeTask, failTask, listTasks, type Task } from "./tasks.ts";
+import {
+  anyReviewsOutstanding,
+  claimNextTask,
+  completeTask,
+  failTask,
+  listTasks,
+  pendingReviewFor,
+  recordTelemetry,
+  resolveReview,
+  submitForReview,
+  type ReviewVerdict,
+  type Task,
+} from "./tasks.ts";
 
 // ── the worker loop ───────────────────────────────────────────────────────────
 // One worker drives one agent CLI against the shared board:
@@ -45,8 +58,14 @@ export type WorkerResult = {
   agent: string;
   completed: number;
   failed: number;
+  reviewed: number;
   outcomes: TaskOutcome[];
   stopped: string;
+};
+
+export type WorkerOptions = {
+  // Other agents in this run, eligible to review this worker's tasks.
+  peers?: string[];
 };
 
 function buildPrompt(repoPath: string, agent: string, task: Task): string {
@@ -91,12 +110,72 @@ function runVerify(command: string, cwd: string, timeoutMs: number): Promise<{ o
   });
 }
 
+function buildReviewPrompt(agent: string, task: Task): string {
+  return [
+    `You are "${agent}", reviewing another agent's work on a shared checkout.`,
+    ``,
+    `## Task under review — ${task.id}: ${task.title}`,
+    task.description || "(no description)",
+    task.files.length > 0 ? `Declared footprint: ${task.files.join(", ")}` : "Declares no file footprint.",
+    ``,
+    `## Author's summary`,
+    task.result || "(none)",
+    ``,
+    `## Diff`,
+    "```diff",
+    (task.diff || "(no diff captured)").slice(0, 6000),
+    "```",
+    ``,
+    `## Your job`,
+    `Judge correctness and whether the change matches the task. Reply with one`,
+    `line: "VERDICT: APPROVE" if it is good, or "VERDICT: REQUEST_CHANGES" if it`,
+    `is wrong or incomplete, followed by a one-sentence reason.`,
+  ].join("\n");
+}
+
+// Parse the reviewer's decision from its output. Defaults to request-changes on
+// an unreadable verdict — safer to send back than to wave through unreviewed.
+function parseVerdict(text: string): { verdict: ReviewVerdict; note: string } {
+  const approve = /VERDICT:\s*APPROVE/i.test(text);
+  const changes = /VERDICT:\s*REQUEST[_-]?CHANGES/i.test(text);
+  const note = text.replace(/\s+/g, " ").trim().slice(-240) || "(no note)";
+  if (approve && !changes) return { verdict: "approve", note };
+  return { verdict: "request-changes", note };
+}
+
+async function drainCli(
+  spawned: { events: AsyncIterable<AgentEvent> },
+  agentName: string,
+  task: Task,
+  hooks: WorkerHooks
+): Promise<{ ok: boolean; summary: string; text: string }> {
+  let ok = false;
+  let summary = "";
+  const textTail: string[] = [];
+  for await (const event of spawned.events) {
+    hooks.onEvent?.(agentName, task, event);
+    if (event.kind === "text") {
+      textTail.push(event.text);
+      if (textTail.length > 8) textTail.shift();
+    } else if (event.kind === "result") {
+      ok = event.ok;
+      summary = event.summary;
+    }
+  }
+  const text = textTail.join(" ");
+  if (!summary || (ok && summary === "exited cleanly")) {
+    summary = text.slice(-500) || summary || "(no output)";
+  }
+  return { ok, summary, text };
+}
+
 export async function runWorker(
   repoPath: string,
   agentName: string,
   config: WardroomConfig,
   hooks: WorkerHooks = {},
-  maxTasks = Infinity
+  maxTasks = Infinity,
+  options: WorkerOptions = {}
 ): Promise<WorkerResult> {
   const agentConfig = config.agents[agentName];
   if (!agentConfig) {
@@ -107,20 +186,68 @@ export async function runWorker(
   const status = hooks.onStatus ?? (() => {});
   const phase = hooks.onPhase ?? (() => {});
 
-  const result: WorkerResult = { agent: agentName, completed: 0, failed: 0, outcomes: [], stopped: "board drained" };
+  const peers = (options.peers ?? []).filter((p) => p !== agentName);
+  const reviewEnabled =
+    (config.review === "changed-files" || config.review === "all") && peers.length > 0;
+  let reviewCursor = 0;
+
+  const result: WorkerResult = {
+    agent: agentName,
+    completed: 0,
+    failed: 0,
+    reviewed: 0,
+    outcomes: [],
+    stopped: "board drained",
+  };
 
   while (result.completed + result.failed < maxTasks) {
+    // 1. Review work assigned to me takes priority over claiming new tasks —
+    //    a task waiting on review is blocking its author's pipeline.
+    if (reviewEnabled) {
+      const toReview = pendingReviewFor(repoPath, agentName);
+      if (toReview) {
+        status(`${agentName}: reviewing ${toReview.id}`);
+        phase(agentName, "working", toReview);
+        const reviewSpawn = spawnCli(
+          agentConfig.bin,
+          agentConfig.args,
+          buildReviewPrompt(agentName, toReview),
+          repoPath,
+          timeoutMs,
+          parser
+        );
+        const { text } = await drainCli(reviewSpawn, agentName, toReview, hooks);
+        const { verdict, note } = parseVerdict(text);
+        const resolved = resolveReview(repoPath, agentName, toReview.id, verdict, note);
+        result.reviewed += 1;
+        status(`${agentName}: review ${toReview.id} -> ${verdict}`);
+        // The reviewer drives the task to its terminal state, so it owns the
+        // count (the author's submit-for-review was not terminal).
+        if (resolved.status === "done") {
+          result.completed += 1;
+          result.outcomes.push({ task: resolved, status: "done", summary: resolved.result ?? "approved" });
+          phase(agentName, "done", resolved);
+        } else if (resolved.status === "failed") {
+          result.failed += 1;
+          result.outcomes.push({ task: resolved, status: "failed", summary: resolved.result ?? "review failed" });
+          phase(agentName, "failed", resolved);
+        }
+        continue;
+      }
+    }
+
     const claim = claimNextTask(repoPath, agentName);
 
     if (claim.status === "empty") {
       const pending = listTasks(repoPath, "pending").length;
       const claimed = listTasks(repoPath, "claimed").length;
-      if (pending === 0 && claimed === 0) {
+      const reviewsLeft = reviewEnabled && anyReviewsOutstanding(repoPath);
+      if (pending === 0 && claimed === 0 && !reviewsLeft) {
         result.stopped = "board drained";
-      } else if (claimed > 0) {
-        // Another worker (or an interactive session) holds work our pending
-        // tasks depend on; a single worker just waits its turn.
-        status(`${agentName}: waiting - ${claim.reason}`);
+      } else if (claimed > 0 || reviewsLeft) {
+        // Another worker holds work our pending tasks depend on, or a task is
+        // in review by a peer. Wait our turn.
+        status(`${agentName}: waiting - ${reviewsLeft ? "reviews in flight" : claim.reason}`);
         phase(agentName, "waiting");
         await new Promise((r) => setTimeout(r, 2000));
         continue;
@@ -187,11 +314,26 @@ export async function runWorker(
       detail = agentSummary;
     }
 
+    const telemetry = footprintTelemetry(repoPath, task.files);
+
     if (outcome === "done") {
+      const shouldReview =
+        reviewEnabled && (config.review === "all" || task.files.length > 0);
+      if (shouldReview) {
+        const reviewer = peers[reviewCursor % peers.length];
+        reviewCursor += 1;
+        const diff = diffOf(repoPath, task.files);
+        submitForReview(repoPath, agentName, task.id, reviewer, detail.slice(0, 800), diff, telemetry);
+        status(`${agentName}: ${task.id} -> review by ${reviewer}`);
+        phase(agentName, "idle");
+        continue; // not terminal for this worker; the reviewer resolves it
+      }
       completeTask(repoPath, agentName, task.id, detail.slice(0, 800));
+      recordTelemetry(repoPath, task.id, telemetry.actualFiles, telemetry.drift);
       result.completed += 1;
     } else {
       failTask(repoPath, agentName, task.id, detail.slice(0, 800));
+      recordTelemetry(repoPath, task.id, telemetry.actualFiles, telemetry.drift);
       result.failed += 1;
     }
     result.outcomes.push({ task, status: outcome, summary: detail });

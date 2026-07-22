@@ -121,10 +121,12 @@ wardroom watch     live dashboard (board, claims, crosstalk, events)
 wardroom board     print the task board and exit
 wardroom log -f    merged events + messages timeline, follow mode
 wardroom say "<msg>" [--to agent] [--kind question|info] [--thread N]
-wardroom run --agents A[,B,...] [--max-tasks N] [--no-tty]
+wardroom plan "<goal>" [--yes]  |  wardroom plan --from FILE
+                   planner agent decomposes a goal into a board (approve/edit
+                   /regenerate), or commit an edited plan
+wardroom run --agents A[,B,...] ["<goal>"] [--max-tasks N] [--no-tty]
                    run a pool of headless workers (one per agent) against the
-                   shared board; live multiplexed view, or interleaved lines
-                   with --no-tty for logs/CI
+                   shared board; with a goal, plan+approve first
 wardroom mcp       the stdio MCP server (what the CLI configs invoke)
 ```
 
@@ -148,9 +150,17 @@ the verification gate, and the per-task timeout:
     }
   },
   "verify": "npm test",
-  "taskTimeoutMinutes": 20
+  "taskTimeoutMinutes": 20,
+  "review": "off",
+  "planner": "claude"
 }
 ```
+
+- `review`: `"off"` (default) completes tasks directly; `"changed-files"`
+  reviews tasks that touched files; `"all"` reviews every task. A finished
+  task is reviewed by a *different* agent before it counts as done — so
+  review needs 2+ agents in the run, and an author never reviews its own work.
+- `planner`: which agent decomposes goals in `wardroom plan`/`run "<goal>"`.
 
 `verify` runs after every file-touching task; the task only counts as done
 if the command passes — completion is gated on verification, not on the

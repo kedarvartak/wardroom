@@ -29,7 +29,7 @@ import {
 const TASKS_FILE = "tasks.json";
 const TASK_TTL_MINUTES = 60;
 
-export type TaskStatus = "pending" | "claimed" | "done" | "failed";
+export type TaskStatus = "pending" | "claimed" | "review" | "done" | "failed";
 
 export type Task = {
   id: string;
@@ -42,6 +42,14 @@ export type Task = {
   result?: string;
   created: string;
   updated: string;
+  // review flow (Phase 4)
+  reviewer?: string;
+  reviewAttempts?: number;
+  diff?: string;
+  // footprint telemetry (Phase 4): files actually changed while this task ran,
+  // and the subset that fell outside its declared footprint.
+  actualFiles?: string[];
+  drift?: string[];
 };
 
 type TasksState = { nextId: number; tasks: Task[] };
@@ -251,6 +259,136 @@ function finishTask(
   });
 }
 
+// ── cross-agent review (Phase 4) ──────────────────────────────────────────────
+// When review is enabled, a worker that finishes a task's work does not mark it
+// done — it submits the task for review by a DIFFERENT agent. The task moves to
+// status "review" (its file lease released, since editing is done and the diff
+// is captured), and a reviewer is assigned. That reviewer, between its own
+// tasks, picks the task up, reads the diff, and either approves (-> done) or
+// requests changes (-> back to pending with notes, for a re-attempt).
+
+const MAX_REVIEW_ATTEMPTS = 2;
+
+export function submitForReview(
+  repoPath: string,
+  agent: string,
+  taskId: string,
+  reviewer: string,
+  workSummary: string,
+  diff: string,
+  telemetry?: { actualFiles: string[]; drift: string[] }
+): Task {
+  const normalizedAgent = normalizeAgent(agent);
+  const normalizedReviewer = normalizeAgent(reviewer);
+  return withLock(repoPath, "tasks", () => {
+    const state = loadState(repoPath);
+    const task = findTask(state, taskId);
+    if (task.status !== "claimed" || task.agent !== normalizedAgent) {
+      throw new Error(`Task ${taskId} is ${task.status} (agent ${task.agent}); cannot submit for review`);
+    }
+    task.status = "review";
+    task.reviewer = normalizedReviewer;
+    task.result = String(workSummary ?? "").trim();
+    task.diff = diff;
+    if (telemetry) {
+      task.actualFiles = telemetry.actualFiles;
+      task.drift = telemetry.drift;
+    }
+    task.updated = nowIso();
+    saveState(repoPath, state);
+    releaseClaimsForTask(repoPath, taskId);
+    postEvent(repoPath, normalizedAgent, "task-review", `${task.id} submitted for review by ${normalizedReviewer}`, {
+      task: task.id,
+      reviewer: normalizedReviewer,
+    });
+    return task;
+  });
+}
+
+// A reviewer's pending queue: tasks in "review" assigned to this agent.
+export function pendingReviewFor(repoPath: string, reviewer: string): Task | null {
+  const normalizedReviewer = normalizeAgent(reviewer);
+  return withLock(repoPath, "tasks", () => {
+    const state = loadState(repoPath);
+    return (
+      state.tasks.find((t) => t.status === "review" && t.reviewer === normalizedReviewer) ?? null
+    );
+  });
+}
+
+export function anyReviewsOutstanding(repoPath: string): boolean {
+  return withLock(repoPath, "tasks", () =>
+    loadState(repoPath).tasks.some((t) => t.status === "review")
+  );
+}
+
+export type ReviewVerdict = "approve" | "request-changes";
+
+export function resolveReview(
+  repoPath: string,
+  reviewer: string,
+  taskId: string,
+  verdict: ReviewVerdict,
+  note: string
+): Task {
+  const normalizedReviewer = normalizeAgent(reviewer);
+  return withLock(repoPath, "tasks", () => {
+    const state = loadState(repoPath);
+    const task = findTask(state, taskId);
+    if (task.status !== "review" || task.reviewer !== normalizedReviewer) {
+      throw new Error(`Task ${taskId} is not awaiting review by ${normalizedReviewer}`);
+    }
+
+    const attempts = (task.reviewAttempts ?? 0) + 1;
+    task.reviewAttempts = attempts;
+    task.updated = nowIso();
+
+    if (verdict === "approve") {
+      task.status = "done";
+      task.result = `${task.result ?? ""}\n[reviewed by ${normalizedReviewer}: approved] ${note}`.trim();
+      delete task.reviewer;
+      saveState(repoPath, state);
+      postEvent(repoPath, normalizedReviewer, "review-approved", `${task.id} approved`, { task: task.id });
+    } else if (attempts >= MAX_REVIEW_ATTEMPTS) {
+      // Don't loop forever: after the cap, changes-requested becomes a failure
+      // that surfaces to the human rather than another silent re-attempt.
+      task.status = "failed";
+      task.result = `review kept requesting changes after ${attempts} attempts. Last note: ${note}`;
+      delete task.reviewer;
+      saveState(repoPath, state);
+      postEvent(repoPath, normalizedReviewer, "review-failed", `${task.id} failed review after ${attempts} attempts`, { task: task.id });
+    } else {
+      // Reopen for another attempt; carry the reviewer's notes into the brief.
+      task.status = "pending";
+      task.description = `${task.description}\n\n[review attempt ${attempts} - changes requested by ${normalizedReviewer}]: ${note}`.trim();
+      delete task.agent;
+      delete task.reviewer;
+      delete task.diff;
+      saveState(repoPath, state);
+      postEvent(repoPath, normalizedReviewer, "review-changes", `${task.id} sent back for changes`, { task: task.id });
+    }
+    return task;
+  });
+}
+
+// Record footprint telemetry on a task at completion time (non-review path).
+export function recordTelemetry(
+  repoPath: string,
+  taskId: string,
+  actualFiles: string[],
+  drift: string[]
+): void {
+  withLock(repoPath, "tasks", () => {
+    const state = loadState(repoPath);
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (task) {
+      task.actualFiles = actualFiles;
+      task.drift = drift;
+      saveState(repoPath, state);
+    }
+  });
+}
+
 // Return a claimed task to the board (agent giving up without failing it) or
 // reset a failed task for retry.
 export function releaseTask(repoPath: string, agent: string, taskId: string): Task {
@@ -326,6 +464,7 @@ export function renderBoard(repoPath: string): string {
   const icon: Record<TaskStatus, string> = {
     pending: "○",
     claimed: "◐",
+    review: "◍",
     done: "●",
     failed: "✗",
   };

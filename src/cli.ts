@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import fs from "fs";
 import path from "path";
+import readline from "readline/promises";
 import { sendMessage, MESSAGE_KINDS, type MessageKind } from "./messages.ts";
-import { renderBoard } from "./tasks.ts";
+import { planTasks, renderBoard, type TaskInput } from "./tasks.ts";
 import { renderDashboard, renderLog } from "./renderer.ts";
 
 // ── wardroom CLI ──────────────────────────────────────────────────────────────
-// Phase 1 surface: mcp | board | log | say | watch. The conductor-driven
-// commands (plan, run, crew, stop) arrive in Phases 2-4 per docs/plan.md.
+// mcp | plan | run | watch | board | log | say. `plan`/`run "<goal>"` use the
+// planner agent to decompose a goal; `run --agents` fans a worker pool at the
+// board (optionally with cross-agent review, per wardroom.json).
 
 const HELP = `wardroom - one terminal for parallel coding agents on one checkout
 
@@ -16,9 +18,12 @@ usage: wardroom <command> [options]
 commands:
   mcp                     start the MCP server over stdio (wire this into
                           Claude Code / Codex / Gemini CLI configs)
-  run --agents A[,B,...] [--max-tasks N] [--no-tty]
-                          drain the task board with a pool of headless
-                          workers (one per agent), live multiplexed view
+  plan "<goal>" [--yes]   planner agent decomposes a goal into a task board;
+  plan --from FILE        review/edit/approve before it is committed, or load
+                          an edited plan (JSON task array) from FILE
+  run --agents A[,B,...] ["<goal>"] [--max-tasks N] [--no-tty]
+                          run a pool of workers (one per agent) at the board;
+                          with a goal, plan+approve first
   watch                   live dashboard: board, claims, crosstalk, events
   board                   print the task board and exit
   log [-n N] [--follow]   merged events + messages timeline
@@ -134,19 +139,122 @@ function cmdSay(repo: string, args: string[]): void {
   process.stdout.write(`sent #${message.seq} captain -> ${message.to} (thread t${message.thread})\n`);
 }
 
+function poolSummary(result: {
+  completed: number;
+  failed: number;
+  reviewed: number;
+  requeued: string[];
+  driftTasks: number;
+  durationMs: number;
+  writedownFile?: string;
+}, agents: string[]): string {
+  return (
+    `${result.completed} done, ${result.failed} failed across ${agents.join(", ")} in ${Math.round(result.durationMs / 1000)}s` +
+    (result.reviewed ? `; ${result.reviewed} review(s)` : "") +
+    (result.requeued.length ? `; requeued ${result.requeued.length} orphaned` : "") +
+    (result.driftTasks ? `; ${result.driftTasks} task(s) with footprint drift` : "") +
+    (result.writedownFile ? `\nwritedown: ${result.writedownFile}` : "")
+  );
+}
+
+function renderProposal(tasks: TaskInput[]): string {
+  return tasks
+    .map((t, i) => {
+      const deps = t.depends_on?.length ? ` (after ${t.depends_on.join(", ")})` : "";
+      const files = t.files?.length ? ` [${t.files.join(", ")}]` : " [no footprint]";
+      return `  $${i}  ${t.title}${deps}${files}`;
+    })
+    .join("\n");
+}
+
+// Generate a plan for a goal and interactively approve / edit / regenerate it,
+// returning the tasks to commit (or null if the user quit). Non-interactive
+// (--yes or no TTY) auto-approves the first proposal.
+async function proposeAndApprove(
+  repo: string,
+  goal: string,
+  autoYes: boolean
+): Promise<TaskInput[] | null> {
+  const { loadConfig } = await import("./config.ts");
+  const { planFromGoal } = await import("./planner.ts");
+  const config = loadConfig(repo);
+
+  for (;;) {
+    process.stderr.write(`planning with ${config.planner}...\n`);
+    const tasks = await planFromGoal(repo, config, goal);
+    process.stdout.write(`\nProposed board (${tasks.length} tasks):\n${renderProposal(tasks)}\n\n`);
+
+    const planFile = path.join(repo, ".memo", "plan.json");
+    fs.mkdirSync(path.dirname(planFile), { recursive: true });
+    fs.writeFileSync(planFile, JSON.stringify(tasks, null, 2) + "\n");
+
+    if (autoYes || !process.stdin.isTTY) return tasks;
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+    const answer = (await rl.question("[a]pprove / [e]dit / [r]egenerate / [q]uit? ")).trim().toLowerCase();
+    rl.close();
+
+    if (answer === "a" || answer === "") return tasks;
+    if (answer === "r") continue;
+    if (answer === "e") {
+      process.stdout.write(
+        `\nProposal written to ${path.relative(repo, planFile)}. Edit it, then:\n  wardroom plan --from ${path.relative(repo, planFile)}\n`
+      );
+      return null;
+    }
+    return null; // quit
+  }
+}
+
+async function cmdPlan(repo: string, args: string[]): Promise<void> {
+  const fromFile = flagValue(args, "--from");
+  const autoYes = hasFlag(args, "--yes") || hasFlag(args, "-y");
+
+  let tasks: TaskInput[];
+  if (fromFile) {
+    tasks = JSON.parse(fs.readFileSync(path.resolve(repo, fromFile), "utf8")) as TaskInput[];
+  } else {
+    const goal = args.join(" ").trim();
+    if (!goal) throw new Error('usage: wardroom plan "<goal>" [--yes]  |  wardroom plan --from FILE');
+    const approved = await proposeAndApprove(repo, goal, autoYes);
+    if (!approved) {
+      process.stdout.write("plan not committed\n");
+      return;
+    }
+    tasks = approved;
+  }
+
+  const { created } = planTasks(repo, "captain", tasks);
+  process.stdout.write(`committed ${created.length} task(s) to the board:\n`);
+  process.stdout.write(renderBoard(repo) + "\n");
+}
+
 async function cmdRun(repo: string, args: string[]): Promise<void> {
   const { loadConfig } = await import("./config.ts");
   const { runPool } = await import("./pool.ts");
   const { renderPool } = await import("./renderer.ts");
 
+  const autoYes = hasFlag(args, "--yes") || hasFlag(args, "-y");
+
   const noTty = hasFlag(args, "--no-tty") || hasFlag(args, "--plain");
   const agentsRaw = flagValue(args, "--agents");
+  const maxTasks = Number(flagValue(args, "--max-tasks") ?? Infinity);
   if (!agentsRaw) {
-    throw new Error("usage: wardroom run --agents <name>[,<name>...] [--max-tasks N] [--no-tty]");
+    throw new Error('usage: wardroom run --agents <name>[,<name>...] ["<goal>"] [--max-tasks N] [--no-tty]');
   }
   const agents = agentsRaw.split(",").map((a) => a.trim()).filter(Boolean);
-  const maxTasks = Number(flagValue(args, "--max-tasks") ?? Infinity);
   const config = loadConfig(repo);
+
+  // A trailing goal (any non-flag remainder) means: plan and approve first.
+  const goal = args.join(" ").trim();
+  if (goal) {
+    const approved = await proposeAndApprove(repo, goal, autoYes);
+    if (!approved) {
+      process.stdout.write("plan not approved; nothing run\n");
+      return;
+    }
+    planTasks(repo, "captain", approved);
+  }
 
   const DIM = "\x1b[2m";
   const CYAN = "\x1b[36m";
@@ -191,12 +299,7 @@ async function cmdRun(repo: string, args: string[]): Promise<void> {
         { maxTasksPerAgent: maxTasks, sweepMs: 10_000 }
       );
       restore();
-      process.stdout.write(
-        `${result.completed} done, ${result.failed} failed across ${agents.join(", ")} in ${Math.round(result.durationMs / 1000)}s` +
-          (result.requeued.length ? ` (requeued ${result.requeued.length} orphaned)` : "") +
-          (result.writedownFile ? `\nwritedown: ${result.writedownFile}` : "") +
-          "\n"
-      );
+      process.stdout.write(poolSummary(result, agents) + "\n");
       if (result.failed > 0) process.exitCode = 1;
     } catch (error) {
       restore();
@@ -222,11 +325,7 @@ async function cmdRun(repo: string, args: string[]): Promise<void> {
     },
     { maxTasksPerAgent: maxTasks, sweepMs: 10_000 }
   );
-  process.stdout.write(
-    `\n${result.completed} done, ${result.failed} failed across ${agents.join(", ")} in ${Math.round(result.durationMs / 1000)}s` +
-      (result.requeued.length ? ` (requeued ${result.requeued.length} orphaned)` : "") +
-      "\n"
-  );
+  process.stdout.write("\n" + poolSummary(result, agents) + "\n");
   if (result.failed > 0) process.exitCode = 1;
 }
 
@@ -236,6 +335,9 @@ async function main(): Promise<void> {
   switch (command) {
     case "run":
       await cmdRun(repoPath(), args);
+      return;
+    case "plan":
+      await cmdPlan(repoPath(), args);
       return;
     case "mcp": {
       const { runMcp } = await import("./mcp.ts");

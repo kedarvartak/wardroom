@@ -17,10 +17,19 @@ export type AgentConfig = {
   role?: string;
 };
 
+export type ReviewPolicy = "off" | "changed-files" | "all";
+
 export type WardroomConfig = {
   agents: Record<string, AgentConfig>;
   verify?: string;
   taskTimeoutMinutes: number;
+  // Cross-agent review (Phase 4): "off" completes tasks directly; otherwise a
+  // finished task is reviewed by a different agent before it counts as done.
+  // "changed-files" reviews only tasks that touched files; "all" reviews every
+  // task. Requires 2+ agents in the run (a task's author cannot review itself).
+  review: ReviewPolicy;
+  // Which agent decomposes goals in `wardroom plan`/`run "<goal>"`.
+  planner: string;
 };
 
 const DEFAULTS: WardroomConfig = {
@@ -42,6 +51,8 @@ const DEFAULTS: WardroomConfig = {
     },
   },
   taskTimeoutMinutes: 20,
+  review: "off",
+  planner: "claude",
 };
 
 export function loadConfig(repoPath: string): WardroomConfig {
@@ -70,6 +81,10 @@ export function loadConfig(repoPath: string): WardroomConfig {
     if (!["claude", "codex", "gemini"].includes(agent.adapter)) {
       throw new Error(`wardroom.json agent "${name}": unknown adapter "${agent.adapter}"`);
     }
+  }
+
+  if (!["off", "changed-files", "all"].includes(config.review)) {
+    throw new Error(`wardroom.json: review must be "off", "changed-files", or "all"`);
   }
 
   return config;

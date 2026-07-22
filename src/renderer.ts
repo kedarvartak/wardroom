@@ -19,6 +19,7 @@ const RESET = "\x1b[0m";
 const STATUS_ICON: Record<TaskStatus, string> = {
   pending: "o",
   claimed: "*",
+  review: "@",
   done: "x",
   failed: "!",
 };

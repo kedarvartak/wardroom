@@ -68,9 +68,12 @@ the harness bridge — a pool of headless agents draining one board
 concurrently, rendered live in a single terminal.
 
 ```
-wardroom run --agents claude,codex,gemini
-                   run one worker per agent against the shared board; claim,
-                   run the CLI, gate completion on your verify command
+wardroom plan "add JWT auth with refresh tokens"
+                   a planner agent decomposes the goal into a file-scoped
+                   task board; you approve, edit, or regenerate it
+wardroom run --agents claude,codex,gemini ["<goal>"]
+                   run one worker per agent against the board (plan first if
+                   a goal is given); optional cross-agent review before done
 wardroom watch     live dashboard for interactive (MCP) sessions
 wardroom board     print the task board
 wardroom log -f    merged events + messages timeline, follow mode
@@ -110,11 +113,13 @@ WARDROOM  myrepo  3 agents  elapsed 02:14
 
 Agents pull tasks atomically (disjoint files run in parallel, colliding
 files serialize), ask each other questions and answer in threads, and
-escalate decisions to you by addressing `captain`. Tasks orphaned by a
-crashed run are returned to the board on the next run. Headless behavior is
-configured in `wardroom.json` (binaries, permission flags, the `verify`
-command that gates completion). What remains is planning quality and
-cross-agent review — Phase 4 of [docs/plan.md](docs/plan.md).
+escalate decisions to you by addressing `captain`. With review enabled
+(`"review": "all"` in `wardroom.json`), a finished task is checked by a
+different agent before it counts as done — a caught bug reopens the task with
+the reviewer's notes and the crew fixes it, no operator needed. Tasks
+orphaned by a crashed run are recovered on the next run, and footprint drift
+(declared-but-untouched files) is reported to sharpen future planning. What
+remains is hardening for 1.0 — Phase 5 of [docs/plan.md](docs/plan.md).
 
 ![Roadmap](docs/diagrams/roadmap.png)
 
