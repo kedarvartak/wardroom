@@ -11,6 +11,8 @@ conflicts. You watch the whole crew from a single terminal and steer it.
 ![node](https://img.shields.io/node/v/wardroom?style=flat-square&color=black)
 ![mcp](https://img.shields.io/badge/MCP-compatible-black?style=flat-square)
 
+![wardroom — you command a conductor; it dispatches Claude and Codex, who delegate to each other on a live board](docs/demo.gif)
+
 The wardroom is the room on a warship where officers meet, plan, and
 coordinate the running of the ship. One ship, one crew, one table.
 

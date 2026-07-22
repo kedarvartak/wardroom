@@ -108,6 +108,34 @@ console.log(me + " did task-" + id);
   assert.match(fs.readFileSync(path.join(repo, "did.txt"), "utf8"), /claude task-1/);
 });
 
+test("an idle agent waits for peer-assigned work, then runs a task delegated to it", async () => {
+  const repo = makeGitRepo();
+  const AGENT = `
+import fs from "fs";
+const me = process.argv[2];
+const id = ((process.argv[3] ?? "").match(/task-(\\d+)/) ?? [])[1] ?? "?";
+fs.appendFileSync("owners.txt", me + ":" + id + "\\n");
+console.log(me + " did " + id);
+`;
+  const config = fakeConfig(repo, ["claude", "codex"], AGENT);
+  const session = startSession(repo, ["claude", "codex"], config, {});
+
+  // Only work on the board is assigned to codex. The bug was that claude,
+  // finding nothing it can claim, declared itself "stuck" and exited — so it
+  // was gone when work was later delegated to it.
+  planTasks(repo, "conductor", [{ title: "codex only", files: ["src/c.ts"], assignee: "codex" }]);
+  await new Promise((r) => setTimeout(r, 2500));
+
+  // Now delegate a task to claude. A correct worker is still alive and runs it.
+  planTasks(repo, "conductor", [{ title: "for claude", files: ["src/x.ts"], assignee: "claude" }]);
+  await new Promise((r) => setTimeout(r, 3500));
+  await session.stop();
+
+  const owners = fs.readFileSync(path.join(repo, "owners.txt"), "utf8").trim().split("\n");
+  assert.ok(owners.includes("codex:1"), owners.join(","));
+  assert.ok(owners.includes("claude:2"), "claude never ran the delegated task: " + owners.join(","));
+});
+
 test("delegated (assigned) tasks route to the right agent in a live session", async () => {
   const repo = makeGitRepo();
   const AGENT = `

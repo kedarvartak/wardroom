@@ -11,6 +11,7 @@ import { diffOf, footprintTelemetry } from "./git.ts";
 import { getMessages } from "./messages.ts";
 import { heartbeat } from "./presence.ts";
 import {
+  anyPendingCanProgress,
   anyReviewsOutstanding,
   claimNextTask,
   completeTask,
@@ -260,24 +261,33 @@ export async function runWorker(
       const pending = listTasks(repoPath, "pending").length;
       const claimed = listTasks(repoPath, "claimed").length;
       const reviewsLeft = reviewEnabled && anyReviewsOutstanding(repoPath);
-      if (pending === 0 && claimed === 0 && !reviewsLeft) {
-        if (!options.shouldStop?.() && options.keepAlive?.()) {
+      const keepAlive = !options.shouldStop?.() && !!options.keepAlive?.();
+      const workRemains = pending > 0 || claimed > 0 || reviewsLeft;
+
+      if (!workRemains) {
+        if (keepAlive) {
+          // Session mode: idle on an empty board, waiting for new/delegated work.
           phase(agentName, "idle");
           await new Promise((r) => setTimeout(r, 1500));
           continue;
         }
         result.stopped = "board drained";
-      } else if (claimed > 0 || reviewsLeft) {
-        // Another worker holds work our pending tasks depend on, or a task is
-        // in review by a peer. Wait our turn.
-        status(`${agentName}: waiting - ${reviewsLeft ? "reviews in flight" : claim.reason}`);
-        phase(agentName, "waiting");
-        await new Promise((r) => setTimeout(r, 2000));
-        continue;
-      } else {
-        result.stopped = `stuck: ${pending} pending task(s) with unsatisfiable dependencies (failed prerequisites?)`;
+        break;
       }
-      break;
+
+      // Work remains, just not claimable by us right now: a peer is working, a
+      // task is assigned to another agent, deps are still in flight, or a review
+      // is pending. Wait — do NOT exit, or we won't be here to pick up work
+      // delegated to us later. Only exit as "stuck" when nothing can progress.
+      const stuck =
+        !keepAlive && claimed === 0 && !reviewsLeft && !anyPendingCanProgress(repoPath);
+      if (stuck) {
+        result.stopped = `stuck: ${pending} pending task(s) blocked by failed prerequisites`;
+        break;
+      }
+      phase(agentName, "waiting");
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
     }
 
     if (claim.status === "all-blocked") {

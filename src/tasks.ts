@@ -460,6 +460,20 @@ export function requeueStaleClaims(repoPath: string): string[] {
   });
 }
 
+// Is there any pending task that could still run — i.e. none of its
+// dependencies have failed? Used to tell "waiting my turn" (a peer holds work,
+// or a task is assigned to another agent) apart from genuinely stuck (every
+// pending task is blocked by a failed prerequisite).
+export function anyPendingCanProgress(repoPath: string): boolean {
+  return withLock(repoPath, "tasks", () => {
+    const state = loadState(repoPath);
+    const failedIds = new Set(state.tasks.filter((t) => t.status === "failed").map((t) => t.id));
+    return state.tasks.some(
+      (t) => t.status === "pending" && !t.dependsOn.some((d) => failedIds.has(d))
+    );
+  });
+}
+
 export function listTasks(repoPath: string, status?: TaskStatus): Task[] {
   const state = withLock(repoPath, "tasks", () => loadState(repoPath));
   return status ? state.tasks.filter((t) => t.status === status) : state.tasks;
