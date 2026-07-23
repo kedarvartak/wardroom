@@ -354,7 +354,8 @@ export function App(props: AppProps) {
         : null,
       h(
         Box,
-        { borderStyle: "round", borderColor: theme.border, paddingX: 1 },
+        // Open-ended input bar: just a rule above and below, no side borders.
+        { borderStyle: "round", borderColor: theme.border, borderLeft: false, borderRight: false, paddingX: 1 },
         h(
           Text,
           { wrap: "truncate-start" },
