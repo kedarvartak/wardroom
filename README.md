@@ -73,7 +73,7 @@ live immediately (no restart) and persist to `wardroom.json`:
 /review all           off | changed-files | all
 /budget 500k          spend cap: 500k / 2m / $5 / off — crew stands down when hit
 /verify npm test      completion gate: tasks touching files must pass it
-/crew  /say  /help  /quit
+/stats  /crew  /say  /help  /quit
 ```
 
 All coordination state lives in plain files under `.memo/` in your repo.

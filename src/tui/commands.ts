@@ -8,6 +8,7 @@ export type SlashCommand =
   | { kind: "help" }
   | { kind: "quit" }
   | { kind: "crew" }
+  | { kind: "stats" }
   | { kind: "say"; body: string }
   | { kind: "add"; name: string; vendor?: string }
   | { kind: "drop"; name: string }
@@ -25,6 +26,7 @@ export const SLASH_HELP: string[] = [
   "/budget 500k | 2m | $5 | off    session spend cap (tokens or dollars); bare /budget shows it",
   "/verify <shell cmd> | off       gate run before a task completes (e.g. npm test); bare /verify shows it",
   "/crew                     roster: who is on, adapters, conductor",
+  "/stats                    parallelism report: speedup, utilization, ready-wait, critical path",
   "/say <message>            broadcast to every agent as the captain",
   "/quit                     stand the crew down and leave",
   "changes persist to wardroom.json; anything without / goes to the conductor",
@@ -44,6 +46,8 @@ export function parseSlash(line: string): SlashCommand | null {
     case "crew":
     case "config":
       return { kind: "crew" };
+    case "stats":
+      return { kind: "stats" };
     case "say": {
       const body = rest.join(" ").trim();
       return body ? { kind: "say", body } : { kind: "error", message: "usage: /say <message>" };

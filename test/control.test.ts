@@ -43,6 +43,7 @@ test("parseSlash: every command form and the error paths", () => {
   assert.deepEqual(parseSlash("/help"), { kind: "help" });
   assert.deepEqual(parseSlash("/quit"), { kind: "quit" });
   assert.deepEqual(parseSlash("/crew"), { kind: "crew" });
+  assert.deepEqual(parseSlash("/stats"), { kind: "stats" });
   assert.deepEqual(parseSlash("/add claude-2"), { kind: "add", name: "claude-2", vendor: undefined });
   assert.deepEqual(parseSlash("/add fixer codex"), { kind: "add", name: "fixer", vendor: "codex" });
   assert.deepEqual(parseSlash("/drop Codex"), { kind: "drop", name: "codex" });

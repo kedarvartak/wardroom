@@ -5,6 +5,7 @@ import { crosstalk } from "../messages.ts";
 import { sendMessage } from "../messages.ts";
 import type { PoolResult, PoolState } from "../pool.ts";
 import type { Session } from "../session.ts";
+import { renderStats } from "../stats.ts";
 import { getTask, listTasks, type Task } from "../tasks.ts";
 import type { WorkerPhase } from "../worker.ts";
 import { parseSlash, SLASH_HELP, type SlashCommand } from "./commands.ts";
@@ -249,6 +250,13 @@ export function App(props: AppProps) {
         });
         return push(...roster, { kind: "info", text: `review: ${session.config.review}` });
       }
+      case "stats":
+        return push(
+          ...renderStats(repoPath)
+            .split("\n")
+            .filter((l) => l.trim())
+            .map((text): TranscriptItem => ({ kind: "info", text: text.replace(/^#+ /, "") }))
+        );
       case "say":
         sendMessage(repoPath, "captain", "all", cmd.body);
         return;
