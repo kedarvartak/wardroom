@@ -57,6 +57,7 @@ wardroom> also rate-limit login to 5/min      # keep commanding, live
 | `wardroom` | Conductor console: command the crew conversationally, watch them work |
 | `wardroom run --agents claude,codex ["<goal>"]` | Non-interactive: plan and drain a board, for CI or overnight runs |
 | `wardroom changes` / `show <task>` | The receipts: what each task changed, and the full diff |
+| `wardroom stats` | Parallelism report: realized speedup, per-agent utilization, ready-wait per task, critical path |
 | `wardroom crew` | Roster check: installed, authenticated, ready |
 | `wardroom board` / `log` / `say` / `watch` | Inspect the board, tail events, message the crew, live dashboard |
 | `wardroom memory` | The crew's shared brief: decisions, conventions, gotchas — injected into every prompt, verified so it can't rot; `pin` / `forget` / `--add` to curate |

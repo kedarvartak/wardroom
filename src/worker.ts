@@ -9,6 +9,7 @@ import { claimFiles } from "./claims.ts";
 import { getContext } from "./context.ts";
 import { changeStat, diffOf, footprintTelemetry } from "./git.ts";
 import { memoryBrief } from "./memory.ts";
+import { waitForBoardChange } from "./wake.ts";
 import { getMessages } from "./messages.ts";
 import { heartbeat } from "./presence.ts";
 import {
@@ -272,7 +273,7 @@ export async function runWorker(
         if (keepAlive) {
           // Session mode: idle on an empty board, waiting for new/delegated work.
           phase(agentName, "idle");
-          await new Promise((r) => setTimeout(r, 1500));
+          await waitForBoardChange(repoPath, 1500);
           continue;
         }
         result.stopped = "board drained";
@@ -290,7 +291,7 @@ export async function runWorker(
         break;
       }
       phase(agentName, "waiting");
-      await new Promise((r) => setTimeout(r, 2000));
+      await waitForBoardChange(repoPath, 2000);
       continue;
     }
 
@@ -298,7 +299,7 @@ export async function runWorker(
       const holders = [...new Set(claim.blocked.flatMap((b) => b.conflicts.map((c) => c.holder)))];
       status(`${agentName}: all eligible tasks blocked by lease(s) held by ${holders.join(", ")}; waiting`);
       phase(agentName, "waiting");
-      await new Promise((r) => setTimeout(r, 3000));
+      await waitForBoardChange(repoPath, 3000);
       continue;
     }
 

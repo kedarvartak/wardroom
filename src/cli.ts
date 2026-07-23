@@ -31,6 +31,8 @@ commands:
   watch                   live dashboard: board, claims, crosstalk, events
   board                   print the task board and exit
   changes                 what each task changed (files, +/-)
+  stats                   parallelism report: speedup, per-agent utilization,
+                          ready-wait per task, critical path
   show <task-id>          a task's change summary and full diff
   log [-n N] [--follow]   merged events + messages timeline
   say <msg> [--to AGENT] [--kind KIND] [--thread N]
@@ -528,6 +530,11 @@ async function main(): Promise<void> {
     case "memory":
       cmdMemory(repoPath(), args);
       return;
+    case "stats": {
+      const { renderStats } = await import("./stats.ts");
+      process.stdout.write(renderStats(repoPath()) + "\n");
+      return;
+    }
     case "compact":
       await cmdCompact(repoPath());
       return;

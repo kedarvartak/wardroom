@@ -48,6 +48,9 @@ export type Task = {
   result?: string;
   created: string;
   updated: string;
+  // When the task was claimed — with `updated` at terminal status, this gives
+  // per-task run time; with dependency completion times, ready-wait time.
+  claimedAt?: string;
   // review flow (Phase 4)
   reviewer?: string;
   reviewAttempts?: number;
@@ -171,6 +174,24 @@ export function claimNextTask(repoPath: string, agent: string): ClaimNextResult 
         (!task.assignee || task.assignee === normalizedAgent)
     );
 
+    // Critical-path scheduling: prefer the task that unblocks the most
+    // downstream work. Finishing a wide unlocker grows the runnable frontier;
+    // finishing a leaf just finishes a leaf. Ties keep board order.
+    const unblocks = new Map<string, number>();
+    const dependentsOf = (id: string, seen: Set<string>): number => {
+      let count = 0;
+      for (const t of state.tasks) {
+        if (t.status === "done" || t.status === "failed" || seen.has(t.id)) continue;
+        if (t.dependsOn.includes(id)) {
+          seen.add(t.id);
+          count += 1 + dependentsOf(t.id, seen);
+        }
+      }
+      return count;
+    };
+    for (const task of eligible) unblocks.set(task.id, dependentsOf(task.id, new Set()));
+    eligible.sort((a, b) => unblocks.get(b.id)! - unblocks.get(a.id)!);
+
     if (eligible.length === 0) {
       const pending = state.tasks.filter((t) => t.status === "pending").length;
       return {
@@ -203,6 +224,7 @@ export function claimNextTask(repoPath: string, agent: string): ClaimNextResult 
 
       task.status = "claimed";
       task.agent = normalizedAgent;
+      task.claimedAt = nowIso();
       task.updated = nowIso();
       saveState(repoPath, state);
       postEvent(repoPath, normalizedAgent, "task-claimed", `Claimed ${task.id}: ${task.title}`, {
@@ -378,6 +400,7 @@ export function resolveReview(
       delete task.agent;
       delete task.reviewer;
       delete task.diff;
+      delete task.claimedAt;
       saveState(repoPath, state);
       postEvent(repoPath, normalizedReviewer, "review-changes", `${task.id} sent back for changes`, { task: task.id });
     }
@@ -435,6 +458,7 @@ export function releaseTask(repoPath: string, agent: string, taskId: string): Ta
     task.status = "pending";
     delete task.agent;
     delete task.result;
+    delete task.claimedAt;
     task.updated = nowIso();
     saveState(repoPath, state);
     releaseClaimsForTask(repoPath, taskId);
@@ -465,6 +489,7 @@ export function requeueStaleClaims(repoPath: string): string[] {
         task.status = "pending";
         delete task.agent;
         delete task.result;
+        delete task.claimedAt;
         task.updated = nowIso();
         requeued.push(task.id);
         postEvent(
