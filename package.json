@@ -13,9 +13,20 @@
   "bugs": {
     "url": "https://github.com/kedarvartak/wardroom/issues"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/mcp.d.ts",
+      "default": "./dist/mcp.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
+    }
+  },
   "files": [
     "dist",
     "scripts",
+    "integrations",
     "docs",
     "CLAUDE.md",
     "GEMINI.md",

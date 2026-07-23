@@ -1,21 +1,29 @@
-
-<div align="center"><pre>
-```                    _
+<div align="center">
+<pre>
+                        _
 __      ____ _ _ __ __| |_ __ ___   ___  _ __ ___
 \ \ /\ / / _` | '__/ _` | '__/ _ \ / _ \| '_ ` _ \
  \ V  V / (_| | | | (_| | | | (_) | (_) | | | | | |
   \_/\_/ \__,_|_|  \__,_|_|  \___/ \___/|_| |_| |_|
-```
 </pre>
 
-![wardroom demo](docs/demo.gif)
+<p><b>Fire-and-forget a crew of coding agents on one checkout — and always have the receipts.</b></p>
+
+<p>
+  <img alt="npm" src="https://img.shields.io/npm/v/wardroom?style=flat-square&color=black">
+  <img alt="license" src="https://img.shields.io/npm/l/wardroom?style=flat-square&color=black">
+  <img alt="node" src="https://img.shields.io/node/v/wardroom?style=flat-square&color=black">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-compatible-black?style=flat-square">
+</p>
+
+<img alt="wardroom demo" src="docs/demo.gif" width="920">
+</div>
 
 Claude Code and Codex run themselves in one terminal, in parallel, on the
 same working tree — no worktrees, no merge step. You command a conductor;
 it dispatches the crew on a live task board; the agents delegate, question,
 and review each other as they go. Every task records exactly what it
 changed, so you stay in sync without gating the autonomy.
-
 
 
 ## Why
@@ -80,6 +88,15 @@ All coordination state lives in plain files under `.memo/` in your repo.
 Agents connect through the `wardroom` MCP server (`get_context`,
 `plan_tasks`, `claim_next_task`, `send_message`, ...) — wiring for each CLI
 is in [docs/setup.md](docs/setup.md).
+
+## Embedding in other harnesses
+
+The coordination core is importable — `import { claimNextTask } from
+"wardroom/core"` — so other harnesses can join a crew natively. First
+integration: a [pi](https://pi.dev) extension
+([integrations/pi](integrations/pi)) that gives a pi session the crew tools,
+**enforced** file leases (pi's `tool_call` event blocks edits to files a
+peer holds), the injected crew brief, and `/board` / `/crosstalk` commands.
 
 ## Documentation
 
