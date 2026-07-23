@@ -268,6 +268,23 @@ export function App(props: AppProps) {
         const r = session.setReview(cmd.policy);
         return push({ kind: "info", text: r.ok ? r.detail : r.error });
       }
+      case "budget": {
+        if (cmd.show) {
+          const b = session.config.budget;
+          const cap = !b ? "none" : b.tokens !== undefined ? `${fmtTokens(b.tokens)} tokens` : `$${b.usd}`;
+          const spent = stateRef.current.panes.reduce((sum, p) => sum + p.tokens, 0);
+          return push({ kind: "info", text: `budget: ${cap} · spent this session: ${fmtTokens(spent)} tok` });
+        }
+        const r = session.setBudget(cmd.clear ? undefined : { tokens: cmd.tokens, usd: cmd.usd });
+        return push({ kind: "info", text: r.ok ? r.detail : r.error });
+      }
+      case "verify": {
+        if (cmd.show) {
+          return push({ kind: "info", text: `verify gate: ${session.config.verify ?? "none"}` });
+        }
+        const r = session.setVerify(cmd.clear ? undefined : cmd.command);
+        return push({ kind: "info", text: r.ok ? r.detail : r.error });
+      }
       case "error":
         return push({ kind: "info", text: cmd.message });
     }

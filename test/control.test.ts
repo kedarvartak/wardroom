@@ -54,6 +54,20 @@ test("parseSlash: every command form and the error paths", () => {
   assert.equal(parseSlash("/frobnicate")?.kind, "error");
 });
 
+test("parseSlash: budget and verify forms", () => {
+  assert.deepEqual(parseSlash("/budget"), { kind: "budget", show: true });
+  assert.deepEqual(parseSlash("/budget off"), { kind: "budget", clear: true });
+  assert.deepEqual(parseSlash("/budget 500k"), { kind: "budget", tokens: 500_000 });
+  assert.deepEqual(parseSlash("/budget 2m"), { kind: "budget", tokens: 2_000_000 });
+  assert.deepEqual(parseSlash("/budget 120000"), { kind: "budget", tokens: 120_000 });
+  assert.deepEqual(parseSlash("/budget $5"), { kind: "budget", usd: 5 });
+  assert.deepEqual(parseSlash("/budget 2.5usd"), { kind: "budget", usd: 2.5 });
+  assert.equal(parseSlash("/budget lots")?.kind, "error");
+  assert.deepEqual(parseSlash("/verify"), { kind: "verify", show: true });
+  assert.deepEqual(parseSlash("/verify off"), { kind: "verify", clear: true });
+  assert.deepEqual(parseSlash("/verify npm test -- --silent"), { kind: "verify", command: "npm test -- --silent" });
+});
+
 test("vendorFor infers the family from instance names", () => {
   assert.equal(vendorFor("claude"), "claude");
   assert.equal(vendorFor("claude-2"), "claude");
@@ -137,4 +151,41 @@ test("setConductor and setReview validate and persist; addAgent rejects unknown 
   assert.equal(onDisk.conductor, "codex");
   assert.equal(onDisk.review, "changed-files");
   await session.stop();
+});
+
+test("setBudget/setVerify apply live, persist, and clearing removes the field from disk", async () => {
+  const repo = makeGitRepo();
+  const config = fakeConfig(repo, ["claude", "codex"]);
+  const session = startSession(repo, ["claude", "codex"], config, {});
+  await new Promise((r) => setTimeout(r, 300));
+
+  assert.ok(!session.setBudget({}).ok);
+  assert.ok(session.setBudget({ tokens: 500_000 }).ok);
+  assert.ok(session.setVerify("npm test").ok);
+  let onDisk = JSON.parse(fs.readFileSync(path.join(repo, "wardroom.json"), "utf8"));
+  assert.deepEqual(onDisk.budget, { tokens: 500_000 });
+  assert.equal(onDisk.verify, "npm test");
+
+  assert.ok(session.setBudget(undefined).ok);
+  assert.ok(session.setVerify(undefined).ok);
+  onDisk = JSON.parse(fs.readFileSync(path.join(repo, "wardroom.json"), "utf8"));
+  assert.ok(!("budget" in onDisk), "cleared budget still on disk");
+  assert.ok(!("verify" in onDisk), "cleared verify still on disk");
+  await session.stop();
+});
+
+test("a live budget cap stops the crew from claiming new work", async () => {
+  const repo = makeGitRepo();
+  const config = fakeConfig(repo, ["claude"]);
+  const session = startSession(repo, ["claude"], config, {});
+  await new Promise((r) => setTimeout(r, 300));
+
+  // Zero-token budget: over-budget immediately; the queued task is never claimed.
+  session.setBudget({ tokens: 0 });
+  planTasks(repo, "conductor", [{ title: "too late", files: ["src/x.ts"] }]);
+  await new Promise((r) => setTimeout(r, 2500));
+  const result = await session.stop();
+  assert.equal(result.budgetStopped, true);
+  assert.equal(result.completed, 0);
+  assert.ok(!fs.existsSync(path.join(repo, "owners.txt")), "task ran despite budget cap");
 });

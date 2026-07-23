@@ -93,9 +93,14 @@ export function saveConfig(repoPath: string, config: WardroomConfig): void {
     review: config.review,
     planner: config.planner,
   };
+  // Optional fields track the live config exactly: clearing one (e.g.
+  // `/budget off`) must remove it from the file, not leave the old value.
   if (config.conductor !== undefined) merged.conductor = config.conductor;
+  else delete merged.conductor;
   if (config.verify !== undefined) merged.verify = config.verify;
+  else delete merged.verify;
   if (config.budget !== undefined) merged.budget = config.budget;
+  else delete merged.budget;
   fs.writeFileSync(file, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
 }
 

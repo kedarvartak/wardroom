@@ -13,6 +13,8 @@ export type SlashCommand =
   | { kind: "drop"; name: string }
   | { kind: "conductor"; name: string }
   | { kind: "review"; policy: string }
+  | { kind: "budget"; show?: boolean; clear?: boolean; tokens?: number; usd?: number }
+  | { kind: "verify"; show?: boolean; clear?: boolean; command?: string }
   | { kind: "error"; message: string };
 
 export const SLASH_HELP: string[] = [
@@ -20,6 +22,8 @@ export const SLASH_HELP: string[] = [
   "/drop <name>              stand an agent down (finishes in-flight work first)",
   "/conductor <name>         who interprets your commands and plans",
   "/review off|changed-files|all   cross-agent review policy",
+  "/budget 500k | 2m | $5 | off    session spend cap (tokens or dollars); bare /budget shows it",
+  "/verify <shell cmd> | off       gate run before a task completes (e.g. npm test); bare /verify shows it",
   "/crew                     roster: who is on, adapters, conductor",
   "/say <message>            broadcast to every agent as the captain",
   "/quit                     stand the crew down and leave",
@@ -56,6 +60,23 @@ export function parseSlash(line: string): SlashCommand | null {
         : { kind: "error", message: "usage: /conductor <agent>" };
     case "review":
       return arg ? { kind: "review", policy: arg.toLowerCase() } : { kind: "error", message: "usage: /review off|changed-files|all" };
+    case "budget": {
+      if (!arg) return { kind: "budget", show: true };
+      if (arg.toLowerCase() === "off") return { kind: "budget", clear: true };
+      const usd = arg.match(/^\$(\d+(?:\.\d+)?)$/) ?? arg.match(/^(\d+(?:\.\d+)?)usd$/i);
+      if (usd) return { kind: "budget", usd: Number(usd[1]) };
+      const tok = arg.match(/^(\d+(?:\.\d+)?)(k|m)?$/i);
+      if (tok) {
+        const scale = tok[2]?.toLowerCase() === "m" ? 1_000_000 : tok[2] ? 1_000 : 1;
+        return { kind: "budget", tokens: Math.round(Number(tok[1]) * scale) };
+      }
+      return { kind: "error", message: "usage: /budget 500k | 2m | 120000 | $5 | off" };
+    }
+    case "verify": {
+      if (!arg) return { kind: "verify", show: true };
+      if (rest.length === 1 && arg.toLowerCase() === "off") return { kind: "verify", clear: true };
+      return { kind: "verify", command: rest.join(" ") };
+    }
     default:
       return { kind: "error", message: `unknown command /${head} — /help lists them` };
   }

@@ -38,6 +38,8 @@ export type Session = {
   removeAgent: (name: string) => ControlResult;
   setConductor: (name: string) => ControlResult;
   setReview: (policy: string) => ControlResult;
+  setBudget: (budget: { tokens?: number; usd?: number } | undefined) => ControlResult;
+  setVerify: (command: string | undefined) => ControlResult;
 };
 
 export function startSession(
@@ -116,6 +118,33 @@ export function startSession(
       config.review = policy as ReviewPolicy;
       saveConfig(repoPath, config);
       return { ok: true, detail: `review policy is now "${policy}"; saved to wardroom.json` };
+    },
+
+    // The pool reads config.budget before every claim and the worker reads
+    // config.verify per task, so both apply live to the running crew.
+    setBudget: (budget) => {
+      if (budget && budget.tokens === undefined && budget.usd === undefined) {
+        return { ok: false, error: "budget needs tokens or usd" };
+      }
+      config.budget = budget;
+      saveConfig(repoPath, config);
+      if (!budget) return { ok: true, detail: "budget cap removed; saved to wardroom.json" };
+      const cap = budget.tokens !== undefined ? `${budget.tokens} tokens` : `$${budget.usd}`;
+      return {
+        ok: true,
+        detail: `budget capped at ${cap} (counted from session start) — the crew stands down when hit; saved to wardroom.json`,
+      };
+    },
+
+    setVerify: (command) => {
+      config.verify = command;
+      saveConfig(repoPath, config);
+      return {
+        ok: true,
+        detail: command
+          ? `tasks that touch files must now pass \`${command}\` before completing; saved to wardroom.json`
+          : "verify gate removed; saved to wardroom.json",
+      };
     },
   };
 }

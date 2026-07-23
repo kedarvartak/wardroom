@@ -70,6 +70,8 @@ live immediately (no restart) and persist to `wardroom.json`:
 /drop codex           stand one down — it finishes in-flight work first
 /conductor claude     choose who interprets your commands and plans
 /review all           off | changed-files | all
+/budget 500k          spend cap: 500k / 2m / $5 / off — crew stands down when hit
+/verify npm test      completion gate: tasks touching files must pass it
 /crew  /say  /help  /quit
 ```
 
