@@ -4,7 +4,7 @@ import { parseCodexLine } from "./adapters/codex.ts";
 import { parseGeminiLine } from "./adapters/gemini.ts";
 import { spawnCli } from "./adapters/runner.ts";
 import type { LineParser } from "./adapters/types.ts";
-import type { KeelcrewConfig } from "./config.ts";
+import type { WardroomConfig } from "./config.ts";
 import { parseTaskPlan } from "./planner.ts";
 import { listTasks, planTasks, type Task, type TaskInput } from "./tasks.ts";
 
@@ -21,7 +21,7 @@ const PARSERS: Record<string, LineParser> = {
   gemini: parseGeminiLine,
 };
 
-function conductorName(config: KeelcrewConfig): string {
+function conductorName(config: WardroomConfig): string {
   return config.conductor || config.planner;
 }
 
@@ -79,14 +79,14 @@ export type ConductorResult = { created: Task[]; note?: string };
 // none — e.g. for a question the conductor decides needs no work).
 export async function interpretCommand(
   repoPath: string,
-  config: KeelcrewConfig,
+  config: WardroomConfig,
   crew: string[],
   command: string
 ): Promise<ConductorResult> {
   const lead = conductorName(config);
   const agentConfig = config.agents[lead];
   if (!agentConfig) {
-    throw new Error(`conductor "${lead}" is not defined in keelcrew.json agents`);
+    throw new Error(`conductor "${lead}" is not defined in wardroom.json agents`);
   }
   const parser = PARSERS[agentConfig.adapter];
   const timeoutMs = config.taskTimeoutMinutes * 60_000;

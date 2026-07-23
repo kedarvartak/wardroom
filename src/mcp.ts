@@ -24,7 +24,7 @@ import {
 import { getMessages, sendMessage, MESSAGE_KINDS } from "./messages.ts";
 import { readMemo, writeSession } from "./writedown.ts";
 
-// keelcrew v0.2 — a coordination server for parallel AI coding agents
+// wardroom v0.2 — a coordination server for parallel AI coding agents
 // sharing ONE repository checkout (no worktrees). Three subsystems:
 //
 //   coordination  claims.ts + tasks.ts + events.ts — file leases, a
@@ -34,7 +34,7 @@ import { readMemo, writeSession } from "./writedown.ts";
 //   context       context.ts — one call that merges both for a joining agent.
 
 const server = new Server(
-  { name: "keelcrew", version: "0.2.0" },
+  { name: "wardroom", version: "0.2.0" },
   { capabilities: { tools: {}, resources: {} } }
 );
 

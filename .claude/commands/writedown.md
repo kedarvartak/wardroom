@@ -16,7 +16,7 @@ high-signal and compact. Use these Markdown sections, omitting any that are empt
 - `## Next steps` — concrete TODOs for whoever picks this up. Tag with `#todo`.
 - `## Blockers` — anything preventing progress. Tag with `#blocker`.
 
-Then call the `write_session` MCP tool from `keelcrew`:
+Then call the `write_session` MCP tool from `wardroom`:
 
 - `repo_path`: the absolute path of this project's repository
 - `agent`: `claude`

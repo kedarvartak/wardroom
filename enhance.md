@@ -1,4 +1,4 @@
-# enhance.md — Hardening `keelcrew`
+# enhance.md — Hardening `wardroom`
 
 > A detailed engineering review of what this project is *for*, where it is
 > **brittle**, and a prioritized plan to make it reliable enough to trust as the
@@ -66,7 +66,7 @@ plus IDE extensions. Two recurring pains motivate this project:
 
 The project's answer is a **single shared, append-only memory log** —
 `AGENTS.md` at the repo root — exposed through an **MCP server**
-(`keelcrew`). Every agent reads recent context before acting and writes
+(`wardroom`). Every agent reads recent context before acting and writes
 its output after. Because the log lives *in the repo*, it versions with the code
 and is portable across every tool that speaks MCP.
 
@@ -210,16 +210,16 @@ no "you did work but logged nothing" nudge. Reliability of the entire system is
 bounded by the model's compliance — the weakest possible guarantee.
 
 ### 3.7 [high] Ships broken out of the box
-- **Self-dependency.** `package.json:37` lists `"keelcrew": "^0.1.0"` as
+- **Self-dependency.** `package.json:37` lists `"wardroom": "^0.1.0"` as
   a dependency *of itself* (introduced by commit `043f7d7`). This is circular and
   will confuse `npm install` / publish.
 - **Placeholder paths committed.** `.claude/settings.json:9` and the README/setup
-  snippets hardcode `/path/to/keelcrew/...`. Copy-paste yields a
+  snippets hardcode `/path/to/wardroom/...`. Copy-paste yields a
   non-functional hook with no error surfaced (`inject-memory.sh` `exit 0`s
   silently if the file is missing).
 - **Run-instruction drift.** `docs/setup.md` says `node /path/.../src/index.ts`
   (a `.ts` file that won't run without `--experimental-strip-types`), while the
-  README uses `npx keelcrew` (the built `dist/`). Two contradictory
+  README uses `npx wardroom` (the built `dist/`). Two contradictory
   install paths.
 
 ### 3.8 [medium] Decision heuristic is noisy

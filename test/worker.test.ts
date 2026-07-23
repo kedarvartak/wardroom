@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import type { KeelcrewConfig } from "../src/config.ts";
+import type { WardroomConfig } from "../src/config.ts";
 import { checkFiles } from "../src/claims.ts";
 import { listTasks, planTasks } from "../src/tasks.ts";
 import { runWorker } from "../src/worker.ts";
@@ -12,11 +12,11 @@ import { runWorker } from "../src/worker.ts";
 // real CLI via the gemini (plain text) adapter. No network, no real agents.
 
 function makeRepo(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "keelcrew-worker-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "wardroom-worker-"));
 }
 
 // The fake agent appends its task marker to done.txt and echoes a summary.
-function fakeAgentConfig(repo: string, script: string, timeoutMinutes = 5): KeelcrewConfig {
+function fakeAgentConfig(repo: string, script: string, timeoutMinutes = 5): WardroomConfig {
   const file = path.join(repo, "fake-agent.mjs");
   fs.writeFileSync(file, script);
   return {

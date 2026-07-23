@@ -1,14 +1,14 @@
 # Unsolved issues — architecture & implementation plan
 
 > The gaps from `differentiation.md`, turned into concrete engineering for
-> keelcrew: the technical design, data models, module changes, and a phased
+> wardroom: the technical design, data models, module changes, and a phased
 > plan. Diagrams in `docs/diagrams/` (referenced inline).
 
 ---
 
 ## 0. The central bet, restated as an engineering problem
 
-keelcrew rejects the industry's worktree isolation and runs many agents on
+wardroom rejects the industry's worktree isolation and runs many agents on
 **one shared checkout**, arbitrated by **file leases**. That kills the parallel
 **merge tax** — but it trades it for a sharper problem the research named
 bluntly:
@@ -21,7 +21,7 @@ So the whole plan below is organized around making that trade a net win, plus
 the table-stakes that any unattended multi-agent harness needs. Five unsolved
 issues, each mapped to concrete architecture:
 
-| # | Unsolved issue | Why it's unsolved elsewhere | keelcrew's lever |
+| # | Unsolved issue | Why it's unsolved elsewhere | wardroom's lever |
 |---|---|---|---|
 | U1 | **Recovery** — undo an autonomous change, incl. shell side-effects | `/rewind` covers Write/Edit, not `rm`/`mv`; no per-task revert | per-task checkpoints + audit journal on the shared tree |
 | U2 | **Cost blindness** — "$6,000 overnight", no live meter | dashboards lag days; no per-agent/per-task attribution | usage already flows through adapters; make it a live receipt |
@@ -86,7 +86,7 @@ which no tool reverses today.
     "detail":"rm data/tmp.json","reversible":false}
    ```
 
-**Rollback.** `keelcrew rollback <task>`:
+**Rollback.** `wardroom rollback <task>`:
 - restore each footprint file to `before` (delete if `before: null`);
 - print any audit entries for the task marked `reversible:false` ("task-3 also
   ran `rm data/tmp.json` — not auto-reversible; review manually").
@@ -117,7 +117,7 @@ for a 3-agent team). There is no live meter, no per-agent/per-task attribution.
 **Design.**
 
 - **Price table.** `src/pricing.ts`: `model → {inputPer1k, outputPer1k}` (a
-  built-in table for common models, overridable in `keelcrew.json`). Adapters
+  built-in table for common models, overridable in `wardroom.json`). Adapters
   already surface `usage` (`tokens`, and `costUsd` for Claude). For agents that
   don't report cost (Codex/Gemini), compute `tokens × price(model)`.
 - **Per-task cost on the receipt.** Attribute usage to the task the agent was
@@ -128,7 +128,7 @@ for a 3-agent team). There is no live meter, no per-agent/per-task attribution.
   `task.decisions`. Cheap, and it's the "ruled-out options" reviewers want.
 - **Live gauge.** The TUI header already sums tokens; add a **cost fuel-gauge**
   (`$ / budget`) that turns amber→red near the cap, plus per-agent cost in each
-  pane footer. `keelcrew show <task>` prints cost + decisions with the diff.
+  pane footer. `wardroom show <task>` prints cost + decisions with the diff.
 - **Hard caps.** The budget stop exists (tokens/usd). Add a **per-task** cap so
   a single runaway task can't burn the session, and a destructive-op cap.
 
@@ -216,7 +216,7 @@ fails in prod."
 
 This is what turns the shared-checkout bet from a liability into an advantage:
 worktrees discover the same breakage at *merge* time, with no attribution;
-keelcrew discovers it *at task boundary*, on one tree, and names the culprit.
+wardroom discovers it *at task boundary*, on one tree, and names the culprit.
 
 **New:** `src/verify.ts` (pipeline + integration check + bisect-by-checkpoint);
 `worker.ts` (call the pipeline), `pool.ts` (schedule the debounced integration
@@ -254,7 +254,7 @@ to be confirmed"). Both failure modes are the field's loudest complaints.
   promotes items confirmed across sessions. Provenance links each item to the
   task/session that created it.
 - **Growth without gating.** Agents propose memory via an MCP `remember` tool;
-  the human curates with `keelcrew memory` (list/pin/forget). Nothing blocks the
+  the human curates with `wardroom memory` (list/pin/forget). Nothing blocks the
   autonomy — memory is captured async and enforced next turn.
 
 **New:** `src/memory-store.ts` (CRUD + verify + consolidate — distinct from the
@@ -319,7 +319,7 @@ a now-trustworthy core.
 
 **Non-goals (kept honest).** No worktrees (the whole point). No token-level
 interruption (fire-and-forget is the moat; steering is at task boundaries). No
-custom model runtime — keelcrew drives the real CLIs on your own subscriptions.
+custom model runtime — wardroom drives the real CLIs on your own subscriptions.
 
 ---
 

@@ -4,24 +4,24 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { checkFiles, claimFiles } from "../src/claims.ts";
-import type { KeelcrewConfig } from "../src/config.ts";
+import type { WardroomConfig } from "../src/config.ts";
 import { sendMessage } from "../src/messages.ts";
 import { runPool } from "../src/pool.ts";
 import { renderPool } from "../src/renderer.ts";
 import { claimNextTask, listTasks, planTasks, requeueStaleClaims } from "../src/tasks.ts";
 
 function makeRepo(): string {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "keelcrew-pool-"));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "wardroom-pool-"));
   fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
   return repo;
 }
 
 // Fake agents via the gemini (plain-text) adapter: each records which task it
 // worked and how long it took, so we can assert concurrency and ownership.
-function poolConfig(repo: string, agents: string[], script: string, timeoutMinutes = 5): KeelcrewConfig {
+function poolConfig(repo: string, agents: string[], script: string, timeoutMinutes = 5): WardroomConfig {
   const file = path.join(repo, "fake-agent.mjs");
   fs.writeFileSync(file, script);
-  const config: KeelcrewConfig = { agents: {}, taskTimeoutMinutes: timeoutMinutes };
+  const config: WardroomConfig = { agents: {}, taskTimeoutMinutes: timeoutMinutes };
   for (const a of agents) {
     config.agents[a] = { adapter: "gemini", bin: process.execPath, args: [file, a] };
   }

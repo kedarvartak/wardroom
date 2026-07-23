@@ -5,12 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { changeStat, changeSummary } from "../src/git.ts";
-import type { KeelcrewConfig } from "../src/config.ts";
+import type { WardroomConfig } from "../src/config.ts";
 import { runPool } from "../src/pool.ts";
 import { getTask, listTasks, planTasks } from "../src/tasks.ts";
 
 function gitRepo(): string {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "keelcrew-chg-"));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "wardroom-chg-"));
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "t@t.t"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "t"], { cwd: repo });
@@ -56,7 +56,7 @@ console.log("edited src/existing.ts");
 `;
   const file = path.join(repo, "agent.mjs");
   fs.writeFileSync(file, AGENT);
-  const config: KeelcrewConfig = {
+  const config: WardroomConfig = {
     agents: { solo: { adapter: "gemini", bin: process.execPath, args: [file] } },
     taskTimeoutMinutes: 5,
     review: "off",
@@ -69,7 +69,7 @@ console.log("edited src/existing.ts");
   assert.ok(task?.changes, "task should have a change record");
   assert.equal(task!.changes!.files[0].path, "src/existing.ts");
   assert.ok(task!.changes!.added > 0);
-  // the diff was captured for `keelcrew show`
+  // the diff was captured for `wardroom show`
   assert.match(task!.diff ?? "", /EDITED/);
 });
 
@@ -79,7 +79,7 @@ test("getTask resolves a task and its recorded diff", async () => {
   const AGENT = `import fs from "fs"; fs.writeFileSync("src/made.ts","hello\\nworld\\n"); console.log("made it");`;
   const file = path.join(repo, "a.mjs");
   fs.writeFileSync(file, AGENT);
-  const config: KeelcrewConfig = {
+  const config: WardroomConfig = {
     agents: { solo: { adapter: "gemini", bin: process.execPath, args: [file] } },
     taskTimeoutMinutes: 5,
     review: "off",

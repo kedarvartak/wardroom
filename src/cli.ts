@@ -6,14 +6,14 @@ import { sendMessage, MESSAGE_KINDS, type MessageKind } from "./messages.ts";
 import { planTasks, renderBoard, type TaskInput } from "./tasks.ts";
 import { renderDashboard, renderLog } from "./renderer.ts";
 
-// ── keelcrew CLI ──────────────────────────────────────────────────────────────
+// ── wardroom CLI ──────────────────────────────────────────────────────────────
 // mcp | plan | run | watch | board | log | say. `plan`/`run "<goal>"` use the
 // planner agent to decompose a goal; `run --agents` fans a worker pool at the
-// board (optionally with cross-agent review, per keelcrew.json).
+// board (optionally with cross-agent review, per wardroom.json).
 
-const HELP = `keelcrew - one terminal for parallel coding agents on one checkout
+const HELP = `wardroom - one terminal for parallel coding agents on one checkout
 
-usage: keelcrew [command] [options]   (no command = interactive console)
+usage: wardroom [command] [options]   (no command = interactive console)
 
 commands:
   (none) / console        start the interactive conductor console: command
@@ -81,7 +81,7 @@ async function cmdWatch(repo: string): Promise<void> {
     try {
       frame = renderDashboard(repo, process.stdout.columns ?? 78);
     } catch (error) {
-      frame = `keelcrew watch: ${error instanceof Error ? error.message : String(error)}`;
+      frame = `wardroom watch: ${error instanceof Error ? error.message : String(error)}`;
     }
     if (frame !== last) {
       last = frame;
@@ -139,7 +139,7 @@ async function cmdCrew(repo: string, args: string[]): Promise<void> {
   const { loadConfig } = await import("./config.ts");
   const config = loadConfig(repo);
   const names = Object.keys(config.agents);
-  process.stdout.write(`crew (${names.length}): from keelcrew.json\n`);
+  process.stdout.write(`crew (${names.length}): from wardroom.json\n`);
   for (const name of names) {
     const agent = config.agents[name];
     let installed = false;
@@ -170,19 +170,19 @@ async function cmdConsole(repo: string, args: string[]): Promise<void> {
     ? agentsRaw.split(",").map((a) => a.trim()).filter(Boolean)
     : Object.keys(config.agents);
   if (crew.length === 0) {
-    throw new Error("no agents configured; add them to keelcrew.json (see docs/setup.md)");
+    throw new Error("no agents configured; add them to wardroom.json (see docs/setup.md)");
   }
   for (const name of crew) {
-    if (!config.agents[name]) throw new Error(`unknown agent "${name}" (not in keelcrew.json)`);
+    if (!config.agents[name]) throw new Error(`unknown agent "${name}" (not in wardroom.json)`);
   }
   await runConsole(repo, crew, config);
 }
 
 async function cmdGuard(args: string[]): Promise<void> {
   const { runGuard } = await import("./guard.ts");
-  const agent = flagValue(args, "--agent") ?? process.env.KEELCREW_AGENT;
+  const agent = flagValue(args, "--agent") ?? process.env.WARDROOM_AGENT;
   if (!agent) {
-    throw new Error("usage: keelcrew guard --agent <name>  (or set KEELCREW_AGENT)");
+    throw new Error("usage: wardroom guard --agent <name>  (or set WARDROOM_AGENT)");
   }
   // repo comes from the hook payload's cwd (falls back to process.cwd()).
   process.exitCode = await runGuard(agent);
@@ -192,7 +192,7 @@ async function cmdShow(repo: string, args: string[]): Promise<void> {
   const { getTask } = await import("./tasks.ts");
   const { changeSummary } = await import("./git.ts");
   const id = args[0];
-  if (!id) throw new Error("usage: keelcrew show <task-id>");
+  if (!id) throw new Error("usage: wardroom show <task-id>");
   const task = getTask(repo, id.startsWith("task-") ? id : `task-${id}`);
   if (!task) throw new Error(`no such task: ${id}`);
 
@@ -227,7 +227,7 @@ async function cmdChanges(repo: string): Promise<void> {
     process.stdout.write(
       `${t.id}  ${t.title}  ${t.agent ? CYAN + "@" + t.agent + RESET + "  " : ""}${DIM}${changeSummary(t.changes)}${RESET}\n` +
         `   ${DIM}${t.changes!.files.map((f) => `${f.status} ${f.path}`).join(", ")}${RESET}\n` +
-        `   ${DIM}keelcrew show ${t.id}${RESET}\n`
+        `   ${DIM}wardroom show ${t.id}${RESET}\n`
     );
   }
 }
@@ -249,7 +249,7 @@ function cmdSay(repo: string, args: string[]): void {
   const thread = threadRaw === undefined ? undefined : Number(threadRaw);
   const body = args.join(" ").trim();
   if (!body) {
-    throw new Error('usage: keelcrew say "<message>" [--to agent] [--kind ' + MESSAGE_KINDS.join("|") + "] [--thread N]");
+    throw new Error('usage: wardroom say "<message>" [--to agent] [--kind ' + MESSAGE_KINDS.join("|") + "] [--thread N]");
   }
   const message = sendMessage(repo, "captain", to, body, kind, thread);
   process.stdout.write(`sent #${message.seq} captain -> ${message.to} (thread t${message.thread})\n`);
@@ -319,7 +319,7 @@ async function proposeAndApprove(
     if (answer === "r") continue;
     if (answer === "e") {
       process.stdout.write(
-        `\nProposal written to ${path.relative(repo, planFile)}. Edit it, then:\n  keelcrew plan --from ${path.relative(repo, planFile)}\n`
+        `\nProposal written to ${path.relative(repo, planFile)}. Edit it, then:\n  wardroom plan --from ${path.relative(repo, planFile)}\n`
       );
       return null;
     }
@@ -336,7 +336,7 @@ async function cmdPlan(repo: string, args: string[]): Promise<void> {
     tasks = JSON.parse(fs.readFileSync(path.resolve(repo, fromFile), "utf8")) as TaskInput[];
   } else {
     const goal = args.join(" ").trim();
-    if (!goal) throw new Error('usage: keelcrew plan "<goal>" [--yes]  |  keelcrew plan --from FILE');
+    if (!goal) throw new Error('usage: wardroom plan "<goal>" [--yes]  |  wardroom plan --from FILE');
     const approved = await proposeAndApprove(repo, goal, autoYes);
     if (!approved) {
       process.stdout.write("plan not committed\n");
@@ -361,7 +361,7 @@ async function cmdRun(repo: string, args: string[]): Promise<void> {
   const agentsRaw = flagValue(args, "--agents");
   const maxTasks = Number(flagValue(args, "--max-tasks") ?? Infinity);
   if (!agentsRaw) {
-    throw new Error('usage: keelcrew run --agents <name>[,<name>...] ["<goal>"] [--max-tasks N] [--no-tty]');
+    throw new Error('usage: wardroom run --agents <name>[,<name>...] ["<goal>"] [--max-tasks N] [--no-tty]');
   }
   const agents = agentsRaw.split(",").map((a) => a.trim()).filter(Boolean);
   const config = loadConfig(repo);
@@ -508,6 +508,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  process.stderr.write(`keelcrew: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`wardroom: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);
 });

@@ -4,7 +4,7 @@ import { parseCodexLine } from "./adapters/codex.ts";
 import { parseGeminiLine } from "./adapters/gemini.ts";
 import { spawnCli } from "./adapters/runner.ts";
 import type { LineParser } from "./adapters/types.ts";
-import type { KeelcrewConfig } from "./config.ts";
+import type { WardroomConfig } from "./config.ts";
 import type { TaskInput } from "./tasks.ts";
 
 // ── planner ───────────────────────────────────────────────────────────────────
@@ -100,14 +100,14 @@ export type PlanHooks = {
 
 export async function planFromGoal(
   repoPath: string,
-  config: KeelcrewConfig,
+  config: WardroomConfig,
   goal: string,
   hooks: PlanHooks = {}
 ): Promise<TaskInput[]> {
   const plannerName = config.planner;
   const agentConfig = config.agents[plannerName];
   if (!agentConfig) {
-    throw new Error(`planner "${plannerName}" is not defined in keelcrew.json agents`);
+    throw new Error(`planner "${plannerName}" is not defined in wardroom.json agents`);
   }
   const parser = PARSERS[agentConfig.adapter];
   const timeoutMs = config.taskTimeoutMinutes * 60_000;

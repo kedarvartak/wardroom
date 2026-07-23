@@ -15,7 +15,7 @@ import {
 import { renderDashboard, renderLog } from "../src/renderer.ts";
 
 function makeRepo(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "keelcrew-msg-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "wardroom-msg-"));
 }
 
 test("messages are sequenced, threaded, and inboxed", () => {

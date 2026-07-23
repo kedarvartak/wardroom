@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { claimFiles } from "../src/claims.ts";
 import { compact } from "../src/compact.ts";
-import type { KeelcrewConfig } from "../src/config.ts";
+import type { WardroomConfig } from "../src/config.ts";
 import { editedPaths, evaluate } from "../src/guard.ts";
 import { postEvent, getEvents } from "../src/events.ts";
 import { getMessages, sendMessage } from "../src/messages.ts";
@@ -14,15 +14,15 @@ import { runPool } from "../src/pool.ts";
 import { listTasks, planTasks } from "../src/tasks.ts";
 
 function makeRepo(): string {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "keelcrew-p5-"));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "wardroom-p5-"));
   fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
   return repo;
 }
 
-function fakeConfig(repo: string, agents: string[], script: string, extra: Partial<KeelcrewConfig> = {}): KeelcrewConfig {
+function fakeConfig(repo: string, agents: string[], script: string, extra: Partial<WardroomConfig> = {}): WardroomConfig {
   const file = path.join(repo, "fake-agent.mjs");
   fs.writeFileSync(file, script);
-  const config: KeelcrewConfig = { agents: {}, taskTimeoutMinutes: 5, review: "off", planner: agents[0], ...extra };
+  const config: WardroomConfig = { agents: {}, taskTimeoutMinutes: 5, review: "off", planner: agents[0], ...extra };
   for (const a of agents) config.agents[a] = { adapter: "gemini", bin: process.execPath, args: [file, a] };
   return config;
 }
@@ -138,7 +138,7 @@ console.log("did task-" + task);
 console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "working" }] } }));
 console.log(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "done", usage: { output_tokens: 100 } }));
 `;
-  const config: KeelcrewConfig = {
+  const config: WardroomConfig = {
     agents: { claude: { adapter: "claude", bin: process.execPath, args: [] } },
     taskTimeoutMinutes: 5,
     review: "off",
@@ -165,7 +165,7 @@ console.log(JSON.stringify({ type: "result", subtype: "success", is_error: false
 `;
   const scriptFile = path.join(repo, "u.mjs");
   fs.writeFileSync(scriptFile, USAGE_AGENT);
-  const config: KeelcrewConfig = {
+  const config: WardroomConfig = {
     agents: { claude: { adapter: "claude", bin: process.execPath, args: [scriptFile] } },
     taskTimeoutMinutes: 5,
     review: "off",

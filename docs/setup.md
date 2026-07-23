@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-npm install -g keelcrew    # or use npx keelcrew without installing
+npm install -g wardroom    # or use npx wardroom without installing
 ```
 
 From a clone: `npm install && npm run build`, then the server is
@@ -18,9 +18,9 @@ Requires Node >= 22.
 ```json
 {
   "mcpServers": {
-    "keelcrew": {
+    "wardroom": {
       "command": "npx",
-      "args": ["keelcrew", "mcp"]
+      "args": ["wardroom", "mcp"]
     }
   }
 }
@@ -37,7 +37,7 @@ injects the latest writedown before every prompt:
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/node_modules/keelcrew/scripts/inject-memory.sh\""
+            "command": "bash \"$CLAUDE_PROJECT_DIR/node_modules/wardroom/scripts/inject-memory.sh\""
           }
         ]
       }
@@ -62,9 +62,9 @@ coordination and write-back — in `~/.codex/config.json`:
 ```json
 {
   "mcpServers": {
-    "keelcrew": {
+    "wardroom": {
       "command": "npx",
-      "args": ["keelcrew", "mcp"]
+      "args": ["wardroom", "mcp"]
     }
   }
 }
@@ -112,38 +112,38 @@ it works underneath.
 | `write_session` | Capture a structured session writedown (`/writedown`) |
 | `read_memo` | Reload prior writedowns into a fresh chat (`/readmemo`) |
 
-## The keelcrew CLI
+## The wardroom CLI
 
-The same package installs the `keelcrew` command for the human:
+The same package installs the `wardroom` command for the human:
 
 ```
-keelcrew           start the interactive conductor console (single terminal):
+wardroom           start the interactive conductor console (single terminal):
                    command the crew conversationally; it dispatches your agents
-keelcrew crew      list configured agents and check each is installed
-keelcrew watch     live dashboard (board, claims, crosstalk, events)
-keelcrew board     print the task board and exit
-keelcrew changes   what each task changed (files, +/-)
-keelcrew show <t>  a task's change summary and full diff
-keelcrew log -f    merged events + messages timeline, follow mode
-keelcrew say "<msg>" [--to agent] [--kind question|info] [--thread N]
-keelcrew plan "<goal>" [--yes]  |  keelcrew plan --from FILE
+wardroom crew      list configured agents and check each is installed
+wardroom watch     live dashboard (board, claims, crosstalk, events)
+wardroom board     print the task board and exit
+wardroom changes   what each task changed (files, +/-)
+wardroom show <t>  a task's change summary and full diff
+wardroom log -f    merged events + messages timeline, follow mode
+wardroom say "<msg>" [--to agent] [--kind question|info] [--thread N]
+wardroom plan "<goal>" [--yes]  |  wardroom plan --from FILE
                    planner agent decomposes a goal into a board (approve/edit
                    /regenerate), or commit an edited plan
-keelcrew run --agents A[,B,...] ["<goal>"] [--max-tasks N] [--no-tty]
+wardroom run --agents A[,B,...] ["<goal>"] [--max-tasks N] [--no-tty]
                    run a pool of headless workers (one per agent) against the
                    shared board; with a goal, plan+approve first
-keelcrew mcp       the stdio MCP server (what the CLI configs invoke)
+wardroom mcp       the stdio MCP server (what the CLI configs invoke)
 ```
 
 Run them from the repo root; state lives in `./.memo/`. Typical setup: your
-agent CLIs in their own terminals, `keelcrew watch` in one more.
+agent CLIs in their own terminals, `wardroom watch` in one more.
 
-## keelcrew.json
+## wardroom.json
 
-A ready-to-edit **starter `keelcrew.json` ships at the repo root** — it wires a
+A ready-to-edit **starter `wardroom.json` ships at the repo root** — it wires a
 `claude` conductor plus a `codex` teammate. Copy it into your own project and
-adjust the binaries/flags. Run `keelcrew crew` to confirm both are installed
-and authenticated, then `keelcrew` to start the console.
+adjust the binaries/flags. Run `wardroom crew` to confirm both are installed
+and authenticated, then `wardroom` to start the console.
 
 Two things to check for real use:
 - **Claude** is set to `--permission-mode acceptEdits` so it can edit
@@ -177,7 +177,7 @@ permission/sandbox flags), the verification gate, and the per-task timeout:
   reviews tasks that touched files; `"all"` reviews every task. A finished
   task is reviewed by a *different* agent before it counts as done — so
   review needs 2+ agents in the run, and an author never reviews its own work.
-- `planner`: which agent decomposes goals in `keelcrew plan`/`run "<goal>"`.
+- `planner`: which agent decomposes goals in `wardroom plan`/`run "<goal>"`.
 - `conductor`: the lead you talk to in the interactive console; it interprets
   your commands into board tasks. Defaults to `planner` if unset. The `agents`
   you list are the crew — only those are dispatched (no others are injected).
@@ -199,7 +199,7 @@ has leased. In that project's `.claude/settings.json`:
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "npx keelcrew guard --agent claude" }
+          { "type": "command", "command": "npx wardroom guard --agent claude" }
         ]
       }
     ]
@@ -207,15 +207,15 @@ has leased. In that project's `.claude/settings.json`:
 }
 ```
 
-Set `--agent` to this session's agent name (or export `KEELCREW_AGENT`). The
+Set `--agent` to this session's agent name (or export `WARDROOM_AGENT`). The
 guard fails open: any error allows the edit, so a guard bug can never wedge a
 session. Headless pool runs enforce leases structurally already (atomic
 claims), so the hook is for interactive sessions.
 
 ## Housekeeping
 
-`keelcrew run` compacts the working logs automatically at the start of each
-run. To compact on demand, `keelcrew compact` archives old events, messages,
+`wardroom run` compacts the working logs automatically at the start of each
+run. To compact on demand, `wardroom compact` archives old events, messages,
 and terminal tasks under `.memo/archive/`, keeping a recent tail live.
 
 `verify` runs after every file-touching task; the task only counts as done

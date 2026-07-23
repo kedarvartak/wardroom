@@ -1,4 +1,4 @@
-# Keelcrew — Product Plan
+# Wardroom — Product Plan
 
 One terminal. Multiple coding agents (Claude Code, Codex, Gemini CLI) working
 the same checkout, talking to each other, coordinating work — and you watch it
@@ -10,9 +10,9 @@ delivery with acceptance criteria, risks. Diagrams referenced here live in
 
 Status: Phases 0-6 complete. Phases 0-5 built the substrate and a batch
 runner; Phase 6 added the **interactive conductor console** — the primary UX
-the project was actually for: you start `keelcrew`, command a single conductor
+the project was actually for: you start `wardroom`, command a single conductor
 conversationally in one terminal, and it dispatches Claude and Codex, who
-delegate to each other on a live board. The batch `keelcrew run` is retained
+delegate to each other on a live board. The batch `wardroom run` is retained
 as the non-interactive/CI path. Last updated 2026-07-22.
 
 ## Phase 6 — the interactive conductor console (the real front end)
@@ -34,9 +34,9 @@ Delivered:
 - **Conductor** (`conductor.ts`): interprets each natural-language command into
   tasks appended to the live board (aware of the current board and the roster,
   so it extends rather than duplicates and can dispatch by assignee).
-- **Console** (`console.ts`, `keelcrew` with no args): a persistent prompt with
+- **Console** (`console.ts`, `wardroom` with no args): a persistent prompt with
   the crew's activity streaming above it; `/board`, `/say`, `/quit`.
-- **`keelcrew crew`**: the ingestion check — lists agents and confirms each CLI
+- **`wardroom crew`**: the ingestion check — lists agents and confirms each CLI
   is installed (they run on their own login/subscription).
 
 ---
@@ -49,11 +49,11 @@ The v0.2 coordination core (task board, file leases, event bus over MCP)
 makes parallel work on one checkout safe — but the operator experience is
 still fragmented, and agents only coordinate *implicitly* through board state.
 
-Keelcrew collapses this into a single CLI harness:
+Wardroom collapses this into a single CLI harness:
 
 - You state a goal. A planner agent decomposes it into a file-scoped task
   board you can edit and approve.
-- Keelcrew spawns each agent CLI headlessly as a worker. Workers pull tasks
+- Wardroom spawns each agent CLI headlessly as a worker. Workers pull tasks
   atomically, so two agents never collide on a file.
 - Agents send each other directed messages — questions, heads-ups, review
   requests — and answer each other. You see the conversation as a live
@@ -79,14 +79,14 @@ The coordination core, exposed over MCP for interactive CLI sessions:
 
 Everything below builds on this core without replacing it. The MCP surface
 stays: interactive sessions (a human driving Claude Code by hand) and
-keelcrew-driven headless workers share the same board, leases, and bus.
+wardroom-driven headless workers share the same board, leases, and bus.
 
 ## 3. Architecture
 
 See `diagrams/architecture.png`.
 
 ```
-keelcrew CLI (one process, one terminal)
+wardroom CLI (one process, one terminal)
 |
 |-- conductor/          session controller
 |     goal intake -> planner -> board approval -> worker pool -> completion
@@ -104,17 +104,17 @@ keelcrew CLI (one process, one terminal)
 |     panes: board | per-agent work streams | crosstalk feed | status bar
 |     also: plain --no-tty mode that interleaves labeled lines for CI/logs
 |
-|-- mcp/                existing stdio MCP server (keelcrew mcp)
+|-- mcp/                existing stdio MCP server (wardroom mcp)
 ```
 
 ### 3.1 The conductor
 
 A state machine per session:
 
-1. **Intake.** `keelcrew run "<goal>"` or `keelcrew plan "<goal>"`.
+1. **Intake.** `wardroom run "<goal>"` or `wardroom plan "<goal>"`.
 2. **Planning.** The configured planner agent (default: claude) is invoked
    headlessly with the goal, repo map, and planning instructions; it emits a
-   task list with file footprints and dependencies via `plan_tasks`. Keelcrew
+   task list with file footprints and dependencies via `plan_tasks`. Wardroom
    renders the proposed board; the user approves, edits, or regenerates.
    Nothing executes before approval.
 3. **Execution.** One worker per configured agent. Worker loop:
@@ -148,7 +148,7 @@ an agent mid-task — queues it for that worker's next turn. A `question` with
 timeout that falls back to the captain.
 
 Messages to `captain` surface in the crosstalk pane highlighted; the user
-answers with `keelcrew say --to <agent> "<reply>"` (or inline in the live
+answers with `wardroom say --to <agent> "<reply>"` (or inline in the live
 view). This is how "agent asks, human decides" works without breaking flow.
 
 ### 3.3 Adapters and the normalized event stream
@@ -164,7 +164,7 @@ AgentEvent =
 ```
 
 Adapter contract requirements: pass-through of permission configuration
-(each CLI's own sandbox/approval flags, configured once in `keelcrew.json`),
+(each CLI's own sandbox/approval flags, configured once in `wardroom.json`),
 a hard wall-clock timeout per task, and kill-on-demand so the user can stop
 a runaway worker. Adapters are the only code that knows CLI-specific flags;
 everything above them is agent-agnostic — adding a fourth CLI is one file.
@@ -199,19 +199,19 @@ it renders coordination state and adapter streams, holds no logic. A
 ### 3.5 CLI surface
 
 ```
-keelcrew init                 scaffold keelcrew.json, .memo/, agent instructions
-keelcrew crew                 list/configure agents (bin, flags, role, planner)
-keelcrew plan "<goal>"        plan the board only; print for approval/editing
-keelcrew run ["<goal>"]       plan (if goal given) + approve + execute, live view
-keelcrew board                print the board and exit
-keelcrew log [--follow]       events + messages, plain text
-keelcrew say "<msg>" [--to a] inject a captain message (answer questions, steer)
-keelcrew stop [agent|task]    stop a worker or the session cleanly
-keelcrew watch                read-only live view (during manual MCP sessions)
-keelcrew mcp                  stdio MCP server (current default behavior)
+wardroom init                 scaffold wardroom.json, .memo/, agent instructions
+wardroom crew                 list/configure agents (bin, flags, role, planner)
+wardroom plan "<goal>"        plan the board only; print for approval/editing
+wardroom run ["<goal>"]       plan (if goal given) + approve + execute, live view
+wardroom board                print the board and exit
+wardroom log [--follow]       events + messages, plain text
+wardroom say "<msg>" [--to a] inject a captain message (answer questions, steer)
+wardroom stop [agent|task]    stop a worker or the session cleanly
+wardroom watch                read-only live view (during manual MCP sessions)
+wardroom mcp                  stdio MCP server (current default behavior)
 ```
 
-`keelcrew.json` (repo root): agents (bin, args, permission flags, role),
+`wardroom.json` (repo root): agents (bin, args, permission flags, role),
 planner choice, verification command (e.g. `npm test`), token budget,
 review policy (off | changed-files | all).
 
@@ -229,7 +229,7 @@ Deliverables
 - `messages.ts`: directed messages, threads, kinds, blocking semantics;
   MCP tools `send_message` / `get_messages`; `get_context` includes unread
   message count per agent.
-- CLI skeleton: `keelcrew mcp | board | log | say | watch`; `keelcrew watch`
+- CLI skeleton: `wardroom mcp | board | log | say | watch`; `wardroom watch`
   renders board, claims, crosstalk, events live from `.memo/` file watching.
 - Protocol docs updated: interactive agents told to check messages and how
   to address each other and the captain.
@@ -237,7 +237,7 @@ Deliverables
 Acceptance criteria
 - Two interactive CLI sessions (e.g. Claude Code and Codex, driven by hand)
   exchange a question and reply through `send_message`, threaded correctly.
-- `keelcrew watch` in a third terminal shows the exchange within 1s, plus
+- `wardroom watch` in a third terminal shows the exchange within 1s, plus
   live board and lease changes, with no MCP connection of its own.
 - Multi-process message tests in the style of the events concurrency test.
 
@@ -250,7 +250,7 @@ Deliverables
   kill, permission pass-through); `codex.ts` and `gemini.ts` following it.
 - Worker loop: claim -> prompt assembly (task + context + inbox) -> spawn ->
   stream -> verification gate (configured command) -> complete/fail.
-- `keelcrew run --agents claude` executes an approved board serially with
+- `wardroom run --agents claude` executes an approved board serially with
   live output through the renderer's single-pane mode.
 
 Acceptance criteria
@@ -311,7 +311,7 @@ Deliverables
 - Lease heartbeats from workers; presence in the status pane.
 - Board archival and event/message log compaction past size thresholds.
 - Token/cost budget: per-session cap, per-agent display, stop-at-budget.
-- npm publish as `keelcrew` 1.0; docs site-quality README and guides.
+- npm publish as `wardroom` 1.0; docs site-quality README and guides.
 
 Acceptance criteria
 - A 2-hour, 30+ task soak session stays under memory/CPU budgets with logs
@@ -322,7 +322,7 @@ Acceptance criteria
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Headless permission models differ per CLI and change between releases | Workers stall on approval prompts or run over-privileged | Permission flags live only in adapters and `keelcrew.json`; adapters fail loudly on unexpected prompts; document a recommended sandbox profile per CLI |
+| Headless permission models differ per CLI and change between releases | Workers stall on approval prompts or run over-privileged | Permission flags live only in adapters and `wardroom.json`; adapters fail loudly on unexpected prompts; document a recommended sandbox profile per CLI |
 | CLI output formats drift (stream-json shape changes) | Adapter breakage | Fixture-based adapter tests; version-pin detection with a clear "adapter needs update" error, not silent garbage |
 | Token cost of always-on multi-agent sessions | Expensive sessions | Per-session budget (Phase 5), planner encouraged to keep boards small, workers idle (not polling an LLM) when the board is empty |
 | Shared runtime contention: two workers running the full test suite collide on ports/artifacts | Flaky verification | Verification gate serialized through a `build/` virtual lease by default; per-task scoped test commands encouraged |
@@ -335,7 +335,7 @@ Acceptance criteria
 - No GUI, no web UI, no browser. The earlier tunnel/web concept
   (`docs/idea.md`) is retired; `idea.md` is kept as history only.
 - No cross-machine orchestration in 1.0. One machine, one checkout.
-- No custom agent runtime: keelcrew drives the official CLIs, it does not
+- No custom agent runtime: wardroom drives the official CLIs, it does not
   reimplement them or proxy their model APIs.
 - No mandatory OS-level file locking; enforcement remains opt-in hooks.
 

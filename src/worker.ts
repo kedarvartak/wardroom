@@ -4,7 +4,7 @@ import { parseCodexLine } from "./adapters/codex.ts";
 import { parseGeminiLine } from "./adapters/gemini.ts";
 import { spawnCli } from "./adapters/runner.ts";
 import type { AgentEvent, LineParser } from "./adapters/types.ts";
-import type { KeelcrewConfig } from "./config.ts";
+import type { WardroomConfig } from "./config.ts";
 import { claimFiles } from "./claims.ts";
 import { getContext } from "./context.ts";
 import { changeStat, diffOf, footprintTelemetry } from "./git.ts";
@@ -187,14 +187,14 @@ async function drainCli(
 export async function runWorker(
   repoPath: string,
   agentName: string,
-  config: KeelcrewConfig,
+  config: WardroomConfig,
   hooks: WorkerHooks = {},
   maxTasks = Infinity,
   options: WorkerOptions = {}
 ): Promise<WorkerResult> {
   const agentConfig = config.agents[agentName];
   if (!agentConfig) {
-    throw new Error(`No agent "${agentName}" in keelcrew.json (known: ${Object.keys(config.agents).join(", ")})`);
+    throw new Error(`No agent "${agentName}" in wardroom.json (known: ${Object.keys(config.agents).join(", ")})`);
   }
   const parser = PARSERS[agentConfig.adapter];
   const timeoutMs = config.taskTimeoutMinutes * 60_000;

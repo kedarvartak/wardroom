@@ -446,7 +446,7 @@ export function releaseTask(repoPath: string, agent: string, taskId: string): Ta
 }
 
 // Crash recovery. A task left "claimed" whose file lease has since expired was
-// orphaned by an agent (or a whole `keelcrew run`) that died without
+// orphaned by an agent (or a whole `wardroom run`) that died without
 // completing or failing it. Its lease is gone, so no one is protected from
 // editing those files — return it to the board so another worker picks it up.
 // Called at pool startup and, optionally, on a periodic sweep during a run.
@@ -469,7 +469,7 @@ export function requeueStaleClaims(repoPath: string): string[] {
         requeued.push(task.id);
         postEvent(
           repoPath,
-          "keelcrew",
+          "wardroom",
           "task-requeued",
           `${task.id} was orphaned by ${orphanedFrom ?? "an agent"} (lease expired) - returned to the board`,
           { task: task.id }

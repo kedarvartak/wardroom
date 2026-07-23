@@ -7,7 +7,7 @@ import { getPresence } from "./presence.ts";
 import { listTasks, type TaskStatus } from "./tasks.ts";
 
 // ── terminal dashboard ────────────────────────────────────────────────────────
-// Pure state -> string. `keelcrew watch` calls this in a loop; `keelcrew
+// Pure state -> string. `wardroom watch` calls this in a loop; `wardroom
 // board`/`log` reuse pieces. No TUI framework: plain lines with a little ANSI,
 // so it stays scrollback-friendly, ssh-safe, and trivially testable.
 
@@ -38,7 +38,7 @@ function shortTime(iso: string): string {
 export function renderDashboard(repoPath: string, width = 78): string {
   const lines: string[] = [];
   const now = new Date().toISOString().slice(11, 19);
-  lines.push(`${BOLD}KEELCREW${RESET}  ${path.basename(repoPath)}  ${DIM}${now} UTC${RESET}`);
+  lines.push(`${BOLD}WARDROOM${RESET}  ${path.basename(repoPath)}  ${DIM}${now} UTC${RESET}`);
   const online = getPresence(repoPath).filter((p) => p.online);
   if (online.length > 0) {
     lines.push(
@@ -115,7 +115,7 @@ export function renderDashboard(repoPath: string, width = 78): string {
   const captainNote = captainUnread > 0 ? `${YELLOW}${captainUnread} message(s) for you${RESET}` : "no messages for you";
   lines.push(header("status", width));
   lines.push(
-    `  ${openTasks} open task(s) | ${claims.length} active claim(s) | ${captainNote} | ${DIM}reply: keelcrew say --to <agent> "..."${RESET}`
+    `  ${openTasks} open task(s) | ${claims.length} active claim(s) | ${captainNote} | ${DIM}reply: wardroom say --to <agent> "..."${RESET}`
   );
 
   return lines.join("\n");
@@ -136,7 +136,7 @@ const PHASE_LABEL: Record<string, string> = {
   failed: "failed",
 };
 
-// The live multiplexed view for `keelcrew run` with a pool: a board strip, one
+// The live multiplexed view for `wardroom run` with a pool: a board strip, one
 // pane per agent (its current task + recent activity), the shared crosstalk
 // feed, and a status line. Per-agent panes come from in-memory PoolState (the
 // agents' transient stdout is not persisted); board and crosstalk come from
@@ -144,7 +144,7 @@ const PHASE_LABEL: Record<string, string> = {
 export function renderPool(repoPath: string, state: PoolState, width = 88): string {
   const lines: string[] = [];
   lines.push(
-    `${BOLD}KEELCREW${RESET}  ${path.basename(repoPath)}  ${DIM}${state.panes.length} agents  elapsed ${elapsed(state.startedAt)}${RESET}`
+    `${BOLD}WARDROOM${RESET}  ${path.basename(repoPath)}  ${DIM}${state.panes.length} agents  elapsed ${elapsed(state.startedAt)}${RESET}`
   );
   lines.push("");
 
@@ -191,7 +191,7 @@ export function renderPool(repoPath: string, state: PoolState, width = 88): stri
   const working = state.panes.filter((p) => p.phase === "working" || p.phase === "verifying").length;
   const captainNote =
     captainUnread > 0
-      ? `${YELLOW}${captainUnread} question(s) for you — reply: keelcrew say --to <agent> "..." --thread <n>${RESET}`
+      ? `${YELLOW}${captainUnread} question(s) for you — reply: wardroom say --to <agent> "..." --thread <n>${RESET}`
       : "no questions for you";
   lines.push(header("status", width));
   lines.push(`  ${working} working | ${done}/${tasks.length} done | ${captainNote}`);
@@ -200,7 +200,7 @@ export function renderPool(repoPath: string, state: PoolState, width = 88): stri
 }
 
 // Plain merged timeline of events + messages, oldest first. Used by
-// `keelcrew log`; colorless so it pipes cleanly.
+// `wardroom log`; colorless so it pipes cleanly.
 export function renderLog(repoPath: string, lastN = 50): string {
   const { events } = getEvents(repoPath, 0, Number.MAX_SAFE_INTEGER);
   const talk = crosstalk(repoPath, Number.MAX_SAFE_INTEGER);

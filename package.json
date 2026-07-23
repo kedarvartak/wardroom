@@ -1,13 +1,13 @@
 {
-  "name": "keelcrew",
+  "name": "wardroom",
   "version": "1.0.0",
   "description": "Fire-and-forget a crew of coding agents on one checkout. Claude and Codex run themselves in parallel on one working tree - no worktrees, no merge conflicts - and every task records what it changed.",
   "type": "module",
   "main": "dist/mcp.js",
   "types": "dist/mcp.d.ts",
-  "homepage": "https://github.com/kedarvartak/keelcrew#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/kedarvartak/keelcrew.git" },
-  "bugs": { "url": "https://github.com/kedarvartak/keelcrew/issues" },
+  "homepage": "https://github.com/kedarvartak/wardroom#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/kedarvartak/wardroom.git" },
+  "bugs": { "url": "https://github.com/kedarvartak/wardroom/issues" },
   "files": [
     "dist",
     "scripts",
@@ -18,7 +18,7 @@
     "LICENSE"
   ],
   "bin": {
-    "keelcrew": "dist/cli.js"
+    "wardroom": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",

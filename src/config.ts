@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-// ── keelcrew.json ─────────────────────────────────────────────────────────────
+// ── wardroom.json ─────────────────────────────────────────────────────────────
 // Per-repo configuration for the harness. Everything CLI-specific (binary,
 // flags, permission model) lives HERE and in the adapters — nothing above the
 // adapter layer knows how a particular agent CLI is invoked.
@@ -19,7 +19,7 @@ export type AgentConfig = {
 
 export type ReviewPolicy = "off" | "changed-files" | "all";
 
-export type KeelcrewConfig = {
+export type WardroomConfig = {
   agents: Record<string, AgentConfig>;
   verify?: string;
   taskTimeoutMinutes: number;
@@ -28,7 +28,7 @@ export type KeelcrewConfig = {
   // "changed-files" reviews only tasks that touched files; "all" reviews every
   // task. Requires 2+ agents in the run (a task's author cannot review itself).
   review: ReviewPolicy;
-  // Which agent decomposes goals in `keelcrew plan`/`run "<goal>"`.
+  // Which agent decomposes goals in `wardroom plan`/`run "<goal>"`.
   planner: string;
   // The lead you talk to in the interactive console; it interprets your
   // commands into board tasks. Defaults to the planner if unset.
@@ -38,7 +38,7 @@ export type KeelcrewConfig = {
   budget?: { tokens?: number; usd?: number };
 };
 
-const DEFAULTS: KeelcrewConfig = {
+const DEFAULTS: WardroomConfig = {
   agents: {
     claude: {
       adapter: "claude",
@@ -61,20 +61,20 @@ const DEFAULTS: KeelcrewConfig = {
   planner: "claude",
 };
 
-export function loadConfig(repoPath: string): KeelcrewConfig {
-  const file = path.join(repoPath, "keelcrew.json");
+export function loadConfig(repoPath: string): WardroomConfig {
+  const file = path.join(repoPath, "wardroom.json");
   if (!fs.existsSync(file)) {
     return structuredClone(DEFAULTS);
   }
 
-  let parsed: Partial<KeelcrewConfig>;
+  let parsed: Partial<WardroomConfig>;
   try {
     parsed = JSON.parse(fs.readFileSync(file, "utf8"));
   } catch (error) {
-    throw new Error(`keelcrew.json is not valid JSON: ${error instanceof Error ? error.message : error}`);
+    throw new Error(`wardroom.json is not valid JSON: ${error instanceof Error ? error.message : error}`);
   }
 
-  // Roster: if keelcrew.json lists agents, THOSE are the crew (we don't inject
+  // Roster: if wardroom.json lists agents, THOSE are the crew (we don't inject
   // the other built-in agents). Each named agent is filled in from the matching
   // built-in default, so `{ "claude": {} }` still gets claude's bin/args.
   let agents: Record<string, AgentConfig>;
@@ -87,7 +87,7 @@ export function loadConfig(repoPath: string): KeelcrewConfig {
     agents = structuredClone(DEFAULTS.agents);
   }
 
-  const config: KeelcrewConfig = {
+  const config: WardroomConfig = {
     ...structuredClone(DEFAULTS),
     ...parsed,
     agents,
@@ -95,15 +95,15 @@ export function loadConfig(repoPath: string): KeelcrewConfig {
 
   for (const [name, agent] of Object.entries(config.agents)) {
     if (!agent.bin || !agent.adapter) {
-      throw new Error(`keelcrew.json agent "${name}" needs "adapter" and "bin"`);
+      throw new Error(`wardroom.json agent "${name}" needs "adapter" and "bin"`);
     }
     if (!["claude", "codex", "gemini"].includes(agent.adapter)) {
-      throw new Error(`keelcrew.json agent "${name}": unknown adapter "${agent.adapter}"`);
+      throw new Error(`wardroom.json agent "${name}": unknown adapter "${agent.adapter}"`);
     }
   }
 
   if (!["off", "changed-files", "all"].includes(config.review)) {
-    throw new Error(`keelcrew.json: review must be "off", "changed-files", or "all"`);
+    throw new Error(`wardroom.json: review must be "off", "changed-files", or "all"`);
   }
 
   return config;

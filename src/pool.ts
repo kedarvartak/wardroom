@@ -1,6 +1,6 @@
 import type { AgentEvent } from "./adapters/types.ts";
 import { compact } from "./compact.ts";
-import type { KeelcrewConfig } from "./config.ts";
+import type { WardroomConfig } from "./config.ts";
 import { changeSummary } from "./git.ts";
 import { getTask, listTasks, requeueStaleClaims } from "./tasks.ts";
 import { runWorker, type WorkerPhase } from "./worker.ts";
@@ -119,7 +119,7 @@ function buildWritedown(repoPath: string, result: Omit<PoolResult, "writedownFil
 export async function runPool(
   repoPath: string,
   agentNames: string[],
-  config: KeelcrewConfig,
+  config: WardroomConfig,
   hooks: PoolHooks = {},
   options: PoolOptions = {}
 ): Promise<PoolResult> {
@@ -128,7 +128,7 @@ export async function runPool(
   }
   for (const name of agentNames) {
     if (!config.agents[name]) {
-      throw new Error(`No agent "${name}" in keelcrew.json (known: ${Object.keys(config.agents).join(", ")})`);
+      throw new Error(`No agent "${name}" in wardroom.json (known: ${Object.keys(config.agents).join(", ")})`);
     }
   }
 
@@ -241,7 +241,7 @@ export async function runPool(
     if (options.writedown !== false && result.completed + result.failed > 0) {
       const written = writeSession(
         repoPath,
-        "keelcrew",
+        "wardroom",
         "conductor",
         buildWritedown(repoPath, result),
         `Pool run: ${result.completed} done / ${result.failed} failed (${agentNames.join(", ")})`

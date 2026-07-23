@@ -4,13 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import type { KeelcrewConfig } from "../src/config.ts";
+import type { WardroomConfig } from "../src/config.ts";
 import { interpretCommand } from "../src/conductor.ts";
 import { startSession } from "../src/session.ts";
 import { claimNextTask, listTasks, planTasks } from "../src/tasks.ts";
 
 function makeGitRepo(): string {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "keelcrew-p6-"));
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "wardroom-p6-"));
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "t@t.t"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "t"], { cwd: repo });
@@ -20,10 +20,10 @@ function makeGitRepo(): string {
   return repo;
 }
 
-function fakeConfig(repo: string, agents: string[], script: string, extra: Partial<KeelcrewConfig> = {}): KeelcrewConfig {
+function fakeConfig(repo: string, agents: string[], script: string, extra: Partial<WardroomConfig> = {}): WardroomConfig {
   const file = path.join(repo, "fake.mjs");
   fs.writeFileSync(file, script);
-  const config: KeelcrewConfig = { agents: {}, taskTimeoutMinutes: 5, review: "off", planner: agents[0], ...extra };
+  const config: WardroomConfig = { agents: {}, taskTimeoutMinutes: 5, review: "off", planner: agents[0], ...extra };
   for (const a of agents) config.agents[a] = { adapter: "gemini", bin: process.execPath, args: [file, a] };
   return config;
 }

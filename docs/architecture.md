@@ -1,4 +1,4 @@
-# Architecture — keelcrew coordination core
+# Architecture — wardroom coordination core
 
 One MCP server, three subsystems, all state under `.memo/` in the repo.
 This document covers the shipped core; the single-terminal harness built on
@@ -6,7 +6,7 @@ top of it is specified in `plan.md`, with diagrams in `diagrams/`.
 
 ```
                  ┌────────────────────────────────────────────┐
-                 │              keelcrew (MCP)                │
+                 │              wardroom (MCP)                │
                  │                                            │
    Claude Code ──┤  coordination        memory        context │
    Codex       ──┤  ┌───────────┐   ┌────────────┐  ┌───────┐ │
@@ -120,11 +120,11 @@ changed). This is the first call every agent makes.
   task is submitted for review by a different agent (status `review`); the
   reviewer approves (-> done) or requests changes (-> reopened with notes,
   capped attempts). A task's author never reviews its own work.
-- `guard.ts` — the enforcement hook (`keelcrew guard`): reads a tool call on
+- `guard.ts` — the enforcement hook (`wardroom guard`): reads a tool call on
   stdin and denies edits to files another agent leases. Fail-open by design.
 - `compact.ts` — archives old events/messages and terminal tasks under
   `.memo/archive/`, preserving seq/cursor and id-counter invariants. Runs at
-  pool start and via `keelcrew compact`.
+  pool start and via `wardroom compact`.
 - `presence.ts` — who is active now (heartbeats), shown on the dashboard;
   workers also renew their file lease during long tasks so it can't lapse.
 - Token/cost budgets — the pool sums usage events; a cap stops new claims
@@ -135,7 +135,7 @@ changed). This is the first call every agent makes.
 - `session.ts` — long-lived session controller: runs the pool in keep-alive
   mode so the crew waits for new/delegated work, `command()` runs the
   conductor, `stop()` drains and writes a session writedown.
-- `console.ts` — the interactive REPL (`keelcrew` with no args): crew activity
+- `console.ts` — the interactive REPL (`wardroom` with no args): crew activity
   streams above a persistent prompt.
 - Directed assignment + `delegate_task`: a task can be pinned to one agent, so
   the conductor can dispatch to a specific agent and agents can delegate to a

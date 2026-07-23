@@ -70,12 +70,12 @@ export function evaluate(
   return {
     allow: false,
     reason:
-      `keelcrew: ${first.holder} holds a lease on ${first.conflictsWith} (${first.reason}, until ${first.expires}). ` +
+      `wardroom: ${first.holder} holds a lease on ${first.conflictsWith} (${first.reason}, until ${first.expires}). ` +
       `Do not edit ${first.path} — claim other work or wait for the lease to expire.`,
   };
 }
 
-// Entry point for `keelcrew guard`. Reads the hook JSON from stdin, decides,
+// Entry point for `wardroom guard`. Reads the hook JSON from stdin, decides,
 // and emits a Claude-Code-compatible deny (or stays silent to allow).
 export async function runGuard(agent: string, repoOverride?: string): Promise<number> {
   const raw = await readStdin();

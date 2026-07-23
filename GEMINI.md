@@ -2,7 +2,7 @@
 
 This project runs multiple agents (Claude, Codex, Gemini) **in parallel on one
 shared checkout — no worktrees**. Coordination goes through the
-`keelcrew` MCP server. Full protocol: `docs/protocol.md`.
+`wardroom` MCP server. Full protocol: `docs/protocol.md`.
 
 ## Before touching anything
 

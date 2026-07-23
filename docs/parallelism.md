@@ -1,6 +1,6 @@
 # Parallel Coding Agents Without Worktrees — Research & Rationale
 
-> Why keelcrew v0.2 is a **shared-checkout coordination server** rather
+> Why wardroom v0.2 is a **shared-checkout coordination server** rather
 > than another isolation tool. Research snapshot: July 2026.
 
 ---

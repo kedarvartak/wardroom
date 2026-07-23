@@ -1,15 +1,15 @@
-# What would make keelcrew truly different
+# What would make wardroom truly different
 
 > A landscape read of AI coding-agent harnesses (2025-2026), what developers
 > actually want from them, where the whitespace is, and an honest assessment of
-> where keelcrew already wins, what it could uniquely own, and the table-stakes
+> where wardroom already wins, what it could uniquely own, and the table-stakes
 > it cannot skip. Sourced inline; full list at the end.
 
 ---
 
 ## 0. The question
 
-keelcrew is a single-terminal harness that runs **multiple** coding-agent CLIs
+wardroom is a single-terminal harness that runs **multiple** coding-agent CLIs
 (Claude Code, Codex) **in parallel on one shared checkout — no worktrees**,
 coordinated by a conductor you command conversationally. Its thesis:
 **fire-and-forget autonomy is the moat; transparency — staying in sync with
@@ -17,7 +17,7 @@ what the agents did — is the differentiator.**
 
 The question isn't "which features are we missing." Feature parity is a losing
 game against Anthropic and Cursor. The question is: **what strong, opinionated
-bet can keelcrew make that the field hasn't — and that developers are actively
+bet can wardroom make that the field hasn't — and that developers are actively
 asking for?** This doc answers that from evidence, not taste.
 
 ---
@@ -43,9 +43,9 @@ Sessions are JSONL trees you can branch and navigate (`/tree`, `/fork`), praised
 as "state-of-the-art for going back" ([HN](https://news.ycombinator.com/item?id=46629341)).
 It deliberately **omits** sub-agents, plan mode, and MCP — you build them.
 
-**The meta-lesson for keelcrew:** Pi's moat is a *thesis* ("the harness is
+**The meta-lesson for wardroom:** Pi's moat is a *thesis* ("the harness is
 yours") executed without compromise, not a checklist. Notably, Pi has **no
-native multi-agent** — it tells you to run instances in tmux. keelcrew's
+native multi-agent** — it tells you to run instances in tmux. wardroom's
 equivalent uncompromised thesis is orthogonal and available: **"the
 orchestration and the audit trail are yours."** That is the lane to own.
 
@@ -66,18 +66,18 @@ orchestration and the audit trail are yours."** That is the lane to own.
 | **Kiro / Antigravity / Spec Kit** | Spec-driven development (requirements → design → tasks) | Varies |
 
 Two things stand out. First, **the universal isolation primitive is the git
-worktree** — "each agent gets its own worktree, no merge conflicts." keelcrew is
+worktree** — "each agent gets its own worktree, no merge conflicts." wardroom is
 the one system that explicitly rejects this. Second, **every shipping
 multi-agent system is single-vendor**: Agent Teams is many *Claude* sessions;
 Codex is *Codex*. Nobody mixes vendors on one board.
 
-The closest analog to keelcrew is **Claude Code Agent Teams** (Feb 2026):
+The closest analog to wardroom is **Claude Code Agent Teams** (Feb 2026):
 teammates self-claim tasks from JSON files via file locking and coordinate via
 peer messages, each in its own worktree. Its documented gaps are telling:
 **no shared memory between teammates**, ~4x the token cost of solo, lagging task
 status, **no session resumption for teammates**, one team per session
 ([alexop.dev](https://alexop.dev/posts/from-tasks-to-swarms-agent-teams-in-claude-code/)).
-keelcrew's memo log and shared board are, almost exactly, the holes Agent Teams
+wardroom's memo log and shared board are, almost exactly, the holes Agent Teams
 left open.
 
 ---
@@ -184,12 +184,12 @@ Cross-referencing "want" against "shipped," the field has **not** delivered:
 
 ---
 
-## 5. Keelcrew's honest position
+## 5. Wardroom's honest position
 
-### Where keelcrew already lands on real demand
+### Where wardroom already lands on real demand
 - **File leases on a shared checkout directly attack the #1 parallelism pain —
   the merge tax.** The field enforces "one writer per file" with N worktrees it
-  then has to reconcile; keelcrew enforces the same invariant *without* the
+  then has to reconcile; wardroom enforces the same invariant *without* the
   worktrees, so there's no superlinear merge, no worktree bookkeeping. This is a
   legitimately contrarian architectural bet against worktree orthodoxy.
 - **Cross-CLI teams (Claude + Codex on one board)** are genuine whitespace —
@@ -201,26 +201,26 @@ Cross-referencing "want" against "shipped," the field has **not** delivered:
 - **Session-memory writedowns + the shared memo** fill the exact hole Agent
   Teams left: "there's no shared memory" between teammates.
 
-### Whitespace keelcrew could *own*
+### Whitespace wardroom could *own*
 - **Transparency as the product surface** — a live view of what each agent is
   doing, which files it holds, and the diff so far. Owning **in-flight
   stay-in-sync review** (not just post-hoc PR review) is defensible; observability
   "hasn't kept pace with generation speed."
 - **Cross-agent review as a first-class loop** — one agent reviews another's
   diff, answering the "self-review = conflict of interest" complaint with
-  *independent* review that's still inside the harness (keelcrew already has this).
+  *independent* review that's still inside the harness (wardroom already has this).
 - **Leases as a brandable primitive that extends to runtime** — worktrees don't
-  isolate ports/DBs/migrations. Lease *runtime resources* the same way keelcrew
+  isolate ports/DBs/migrations. Lease *runtime resources* the same way wardroom
   leases files. Nobody solves this.
 - **Memory that is obeyed, not just written** — if writedowns are enforced and
-  surfaced, keelcrew could beat the "CLAUDE.md is a wish list, memory rots"
+  surfaced, wardroom could beat the "CLAUDE.md is a wish list, memory rots"
   failure that plagues everyone.
 
-### Table-stakes keelcrew must not miss (the critical part)
+### Table-stakes wardroom must not miss (the critical part)
 1. **Live cost/token fuel-gauge with hard caps + per-agent attribution.**
    Multi-agent multiplies the "$6,000 overnight" risk (~800k tokens for a
    3-agent team). Several CLIs running unattended with no live spend meter is
-   unacceptable. keelcrew has budgets and per-agent tokens — this should become a
+   unacceptable. wardroom has budgets and per-agent tokens — this should become a
    prominent live gauge, and per-task cost belongs on the change record.
 2. **Cheap rollback that also covers shell side-effects.** `/rewind` famously
    doesn't undo `rm`/`mv`. On a shared checkout with multiple writers, robust
@@ -229,21 +229,21 @@ Cross-referencing "want" against "shipped," the field has **not** delivered:
 3. **A verification gate for semantic and runtime conflicts.** Leases stop
    *text* conflicts, but "semantic errors pass compilation, linting, and even
    basic tests but fail in production," and shared ports/DBs let one agent's dev
-   server or migration trample another's. keelcrew has a verify gate; it must be
+   server or migration trample another's. wardroom has a verify gate; it must be
    real, and it needs a runtime-collision story, or the shared checkout becomes a
    liability instead of an advantage. **This is the sharp edge of the whole bet.**
 4. **Autonomy dial + approval gates.** Fire-and-forget must still be *bounded*
    (the Replit-deleted-prod-DB lesson): plan mode, bounded auto-run, review
    before the diff is accepted.
 5. **Lease + memory persistence across resume**, so a restarted session picks up
-   exactly where it left off (Agent Teams can't — keelcrew should).
+   exactly where it left off (Agent Teams can't — wardroom should).
 6. **Clean egress to commits/PRs** without recreating "vibe merging."
 
 ---
 
 ## 6. Recommendation: the differentiated bet
 
-keelcrew's design already lands on the two loudest unmet needs — **the merge
+wardroom's design already lands on the two loudest unmet needs — **the merge
 tax of parallel agents** and **transparency/receipts for trust** — and its memo
 fills Agent Teams' shared-memory hole. The differentiation is real. To make it
 *truly* different rather than just a good orchestrator, lean the whole product
@@ -259,7 +259,7 @@ Concretely, in rough priority (each ties to a sourced demand above):
    add **per-task cost**, a **decision log** (what the agent tried and ruled
    out), and a **live cost/lease/what-changed gauge** in the TUI. This is the
    in-flight review nobody ships. *(Trust §, Whitespace #3.)*
-2. **Side-effect-safe rollback** (`keelcrew rollback <task>`), including
+2. **Side-effect-safe rollback** (`wardroom rollback <task>`), including
    protection against cross-agent `rm`. *(Autonomy §, table-stakes #2.)*
 3. **A verification gate that catches semantic/runtime conflicts** before a
    task's diff counts as done — the sharp edge of the shared-checkout bet.

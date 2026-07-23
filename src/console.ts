@@ -1,7 +1,7 @@
 import path from "path";
 import readline from "readline";
 import { renderBridge, type BridgeModel } from "./bridge.ts";
-import type { KeelcrewConfig } from "./config.ts";
+import type { WardroomConfig } from "./config.ts";
 import { sendMessage } from "./messages.ts";
 import type { PoolState } from "./pool.ts";
 import { startSession } from "./session.ts";
@@ -20,7 +20,7 @@ const HIDE = "\x1b[?25l";
 const SHOW = "\x1b[?25h";
 const HOME = "\x1b[H";
 
-export async function runConsole(repoPath: string, crew: string[], config: KeelcrewConfig): Promise<void> {
+export async function runConsole(repoPath: string, crew: string[], config: WardroomConfig): Promise<void> {
   const out = process.stdout;
   const project = path.basename(repoPath);
 
@@ -71,7 +71,7 @@ export async function runConsole(repoPath: string, crew: string[], config: Keelc
     const result = await session.stop();
     cleanup();
     out.write(
-      `keelcrew · ${result.completed} done, ${result.failed} failed this session` +
+      `wardroom · ${result.completed} done, ${result.failed} failed this session` +
         (result.writedownFile ? ` — writedown ${result.writedownFile}` : "") +
         "\n"
     );
