@@ -6,8 +6,13 @@
   "main": "dist/mcp.js",
   "types": "dist/mcp.d.ts",
   "homepage": "https://github.com/kedarvartak/wardroom#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/kedarvartak/wardroom.git" },
-  "bugs": { "url": "https://github.com/kedarvartak/wardroom/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kedarvartak/wardroom.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kedarvartak/wardroom/issues"
+  },
   "files": [
     "dist",
     "scripts",
@@ -41,10 +46,13 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "ink": "^6.8.0",
+    "react": "^19.2.8",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "@types/react": "^19.2.17",
     "typescript": "^5.7.0"
   },
   "engines": {

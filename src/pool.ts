@@ -58,6 +58,9 @@ export type PoolHooks = {
   // Per-event stream, for --no-tty interleaved line output.
   onLine?: (agent: string, taskId: string, event: AgentEvent) => void;
   onStatus?: (line: string) => void;
+  // Structured lifecycle transitions, forwarded from each worker — the TUI
+  // turns these into transcript lines (started/finished/failed).
+  onPhase?: (agent: string, phase: WorkerPhase, task?: { id: string; title: string }) => void;
 };
 
 export type PoolOptions = {
@@ -189,6 +192,7 @@ export async function runPool(
                 pane.taskId = undefined;
                 pane.taskTitle = undefined;
               }
+              hooks.onPhase?.(agent, phase, task ? { id: task.id, title: task.title } : undefined);
               notify();
             },
             onEvent: (agent, task, event) => {
