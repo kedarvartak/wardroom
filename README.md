@@ -62,6 +62,17 @@ wardroom> also rate-limit login to 5/min      # keep commanding, live
 | `wardroom memory` | The crew's shared brief: decisions, conventions, gotchas — injected into every prompt, verified so it can't rot; `pin` / `forget` / `--add` to curate |
 | `wardroom guard` / `compact` / `mcp` | Lease enforcement hook, log compaction, the MCP server itself |
 
+Inside the console, slash commands give total runtime control — changes go
+live immediately (no restart) and persist to `wardroom.json`:
+
+```
+/add claude-2         hire another agent mid-session (vendor inferred from the name)
+/drop codex           stand one down — it finishes in-flight work first
+/conductor claude     choose who interprets your commands and plans
+/review all           off | changed-files | all
+/crew  /say  /help  /quit
+```
+
 All coordination state lives in plain files under `.memo/` in your repo.
 Agents connect through the `wardroom` MCP server (`get_context`,
 `plan_tasks`, `claim_next_task`, `send_message`, ...) — wiring for each CLI

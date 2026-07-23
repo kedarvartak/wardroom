@@ -21,5 +21,10 @@ const AGENT_COLORS: Record<string, string> = {
 };
 
 export function agentColor(name: string): string {
-  return AGENT_COLORS[name] ?? theme.warn;
+  if (AGENT_COLORS[name]) return AGENT_COLORS[name];
+  // Instances share the family color: claude-2 renders like claude.
+  const family = Object.keys(AGENT_COLORS).find(
+    (v) => name.toLowerCase().startsWith(`${v}-`) || name.toLowerCase().startsWith(`${v}_`)
+  );
+  return family ? AGENT_COLORS[family] : theme.warn;
 }

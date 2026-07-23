@@ -7,6 +7,7 @@ import type { PoolResult, PoolState } from "../pool.ts";
 import type { Session } from "../session.ts";
 import { getTask, listTasks, type Task } from "../tasks.ts";
 import type { WorkerPhase } from "../worker.ts";
+import { parseSlash, SLASH_HELP, type SlashCommand } from "./commands.ts";
 import { fmtElapsed, fmtTokens, SPINNER, STATUS_GLYPH, type TranscriptItem } from "./format.ts";
 import { agentColor, theme } from "./theme.ts";
 
@@ -82,7 +83,7 @@ function TranscriptRow({ item }: { item: TranscriptItem }) {
           h(Text, { bold: true }, "wardroom"),
           h(Text, { color: theme.dim }, `  ${item.project} · crew ${item.crew.join(", ")}`)
         ),
-        h(Text, { color: theme.faint }, "  command the conductor below · /say broadcasts · /quit stands down")
+        h(Text, { color: theme.faint }, "  command the conductor below · /help for crew control · /quit stands down")
       );
     case "user":
       return h(
@@ -231,6 +232,47 @@ export function App(props: AppProps) {
     });
   };
 
+  const runSlash = (cmd: SlashCommand) => {
+    switch (cmd.kind) {
+      case "quit":
+        return void shutdown();
+      case "help":
+        return push(...SLASH_HELP.map((text): TranscriptItem => ({ kind: "info", text })));
+      case "crew": {
+        const conductor = session.config.conductor || session.config.planner;
+        const roster = session.crew().map((name): TranscriptItem => {
+          const a = session.config.agents[name];
+          return {
+            kind: "info",
+            text: `${name}  (${a?.adapter ?? "?"} adapter)${name === conductor ? "  — conductor" : ""}`,
+          };
+        });
+        return push(...roster, { kind: "info", text: `review: ${session.config.review}` });
+      }
+      case "say":
+        sendMessage(repoPath, "captain", "all", cmd.body);
+        return;
+      case "add": {
+        const r = session.addAgent(cmd.name, cmd.vendor);
+        return push({ kind: "info", text: r.ok ? r.detail : r.error });
+      }
+      case "drop": {
+        const r = session.removeAgent(cmd.name);
+        return push({ kind: "info", text: r.ok ? r.detail : r.error });
+      }
+      case "conductor": {
+        const r = session.setConductor(cmd.name);
+        return push({ kind: "info", text: r.ok ? r.detail : r.error });
+      }
+      case "review": {
+        const r = session.setReview(cmd.policy);
+        return push({ kind: "info", text: r.ok ? r.detail : r.error });
+      }
+      case "error":
+        return push({ kind: "info", text: cmd.message });
+    }
+  };
+
   useInput((ch, key) => {
     if (key.ctrl && ch === "c") return shutdown();
     if (stopping) return;
@@ -238,13 +280,13 @@ export function App(props: AppProps) {
       const line = input.trim();
       setInput("");
       if (!line) return;
-      if (line === "/quit" || line === "/exit") return shutdown();
-      push({ kind: "user", text: line });
-      if (line.startsWith("/say ")) {
-        const msg = line.slice(5).trim();
-        if (msg) sendMessage(repoPath, "captain", "all", msg);
+      const slash = parseSlash(line);
+      if (slash) {
+        if (slash.kind !== "quit") push({ kind: "user", text: line });
+        runSlash(slash);
         return;
       }
+      push({ kind: "user", text: line });
       setThinking(true);
       session
         .command(line)
@@ -307,7 +349,7 @@ export function App(props: AppProps) {
       h(
         Box,
         { justifyContent: "space-between", paddingX: 1, marginBottom: 1 },
-        h(Text, { color: theme.faint }, "enter send · /say broadcast · /quit exit"),
+        h(Text, { color: theme.faint }, "enter send · /help commands · /quit exit"),
         h(Text, { color: theme.faint }, `${fmtElapsed(Date.now() - stateRef.current.startedAt)} · ${fmtTokens(tokens)} tok`)
       )
     )

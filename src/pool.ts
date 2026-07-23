@@ -2,8 +2,8 @@ import type { AgentEvent } from "./adapters/types.ts";
 import { compact } from "./compact.ts";
 import type { WardroomConfig } from "./config.ts";
 import { changeSummary } from "./git.ts";
-import { getTask, listTasks, requeueStaleClaims } from "./tasks.ts";
-import { runWorker, type WorkerPhase } from "./worker.ts";
+import { getTask, listTasks, requeueStaleClaims, type Task } from "./tasks.ts";
+import { runWorker, type WorkerPhase, type WorkerResult } from "./worker.ts";
 import { writeSession } from "./writedown.ts";
 
 // ── the worker pool ───────────────────────────────────────────────────────────
@@ -73,6 +73,18 @@ export type PoolOptions = {
   // Interactive sessions: keep workers alive on a drained board, waiting for
   // new/delegated tasks, until this returns false.
   keepAlive?: () => boolean;
+  // Receives a controller for changing crew membership mid-run (slash
+  // commands). Only meaningful with keepAlive.
+  register?: (control: PoolControl) => void;
+};
+
+export type PoolControl = {
+  // Spawn a worker for an agent already present in config.agents.
+  addAgent: (name: string) => { ok: true } | { ok: false; error: string };
+  // Stop an agent's worker: it finishes in-flight work, claims nothing new,
+  // and leaves the crew. Its config entry survives for a later re-add.
+  removeAgent: (name: string) => { ok: true } | { ok: false; error: string };
+  agents: () => string[];
 };
 
 function pushLine(pane: AgentPane, text: string): void {
@@ -171,51 +183,115 @@ export async function runPool(
     if (typeof sweep.unref === "function") sweep.unref();
   }
 
+  // ── dynamic membership ─────────────────────────────────────────────────────
+  // Workers can join and leave mid-run (slash commands). `entries` only ever
+  // grows — a removed worker's promise still resolves and its results still
+  // count; `active` is the live roster.
+  const entries: { name: string; promise: Promise<WorkerResult> }[] = [];
+  const active = new Set<string>();
+  const removed = new Set<string>();
+
+  const workerHooks = {
+    onPhase: (agent: string, phase: WorkerPhase, task?: { id: string; title: string }) => {
+      const pane = panes.get(agent);
+      if (!pane) return;
+      pane.phase = phase;
+      if (task) {
+        pane.taskId = task.id;
+        pane.taskTitle = task.title;
+      }
+      if (phase === "done") pane.completed += 1;
+      if (phase === "failed") pane.failed += 1;
+      if (phase === "idle" || phase === "waiting") {
+        pane.taskId = undefined;
+        pane.taskTitle = undefined;
+      }
+      hooks.onPhase?.(agent, phase, task);
+      notify();
+    },
+    onEvent: (agent: string, task: Task, event: AgentEvent) => {
+      const pane = panes.get(agent);
+      if (!pane) return;
+      if (event.kind === "text") pushLine(pane, event.text);
+      else if (event.kind === "tool") pushLine(pane, event.detail);
+      else if (event.kind === "usage") {
+        if (event.tokens) {
+          pane.tokens += event.tokens;
+          tokens += event.tokens;
+        }
+        if (event.costUsd) costUsd += event.costUsd;
+      }
+      hooks.onLine?.(agent, task.id, event);
+      notify();
+    },
+    onStatus: hooks.onStatus,
+  };
+
+  const spawn = (name: string): void => {
+    removed.delete(name);
+    active.add(name);
+    if (!panes.has(name)) {
+      const pane: AgentPane = { agent: name, phase: "idle", lines: [], tokens: 0, completed: 0, failed: 0 };
+      panes.set(name, pane);
+      state.panes.push(pane);
+    }
+    const promise = runWorker(
+      repoPath,
+      name,
+      config,
+      workerHooks,
+      options.maxTasksPerAgent ?? Infinity,
+      {
+        peers: [...active].filter((peer) => peer !== name),
+        shouldStop: () => shouldStop() || removed.has(name),
+        keepAlive: options.keepAlive ? () => options.keepAlive!() && !removed.has(name) : undefined,
+      }
+    ).then((result) => {
+      // A worker that exited (removed, or non-keep-alive drain) leaves the
+      // live roster and the pane display.
+      if (active.delete(name)) {
+        panes.delete(name);
+        state.panes = state.panes.filter((p) => p.agent !== name);
+        notify();
+      }
+      return result;
+    });
+    entries.push({ name, promise });
+    notify();
+  };
+
+  options.register?.({
+    addAgent: (name) => {
+      if (!config.agents[name]) return { ok: false, error: `no agent "${name}" in config` };
+      if (active.has(name)) return { ok: false, error: `${name} is already on the crew` };
+      spawn(name);
+      return { ok: true };
+    },
+    removeAgent: (name) => {
+      if (!active.has(name) || removed.has(name)) return { ok: false, error: `${name} is not on the crew` };
+      if (active.size - removed.size <= 1) return { ok: false, error: "cannot drop the last crew member" };
+      removed.add(name);
+      return { ok: true };
+    },
+    agents: () => [...active].filter((n) => !removed.has(n)),
+  });
+
   try {
-    const results = await Promise.all(
-      agentNames.map((name) =>
-        runWorker(
-          repoPath,
-          name,
-          config,
-          {
-            onPhase: (agent, phase, task) => {
-              const pane = panes.get(agent)!;
-              pane.phase = phase;
-              if (task) {
-                pane.taskId = task.id;
-                pane.taskTitle = task.title;
-              }
-              if (phase === "done") pane.completed += 1;
-              if (phase === "failed") pane.failed += 1;
-              if (phase === "idle" || phase === "waiting") {
-                pane.taskId = undefined;
-                pane.taskTitle = undefined;
-              }
-              hooks.onPhase?.(agent, phase, task ? { id: task.id, title: task.title } : undefined);
-              notify();
-            },
-            onEvent: (agent, task, event) => {
-              const pane = panes.get(agent)!;
-              if (event.kind === "text") pushLine(pane, event.text);
-              else if (event.kind === "tool") pushLine(pane, event.detail);
-              else if (event.kind === "usage") {
-                if (event.tokens) {
-                  pane.tokens += event.tokens;
-                  tokens += event.tokens;
-                }
-                if (event.costUsd) costUsd += event.costUsd;
-              }
-              hooks.onLine?.(agent, task.id, event);
-              notify();
-            },
-            onStatus: hooks.onStatus,
-          },
-          options.maxTasksPerAgent ?? Infinity,
-          { peers: agentNames.filter((peer) => peer !== name), shouldStop, keepAlive: options.keepAlive }
-        )
-      )
-    );
+    // Register the whole starting roster before spawning anyone, so every
+    // initial worker sees the full peer list (review needs it). Later joiners
+    // see the roster as of their spawn; earlier workers' peer lists are not
+    // retroactively extended — a newcomer becomes reviewable, not a reviewer,
+    // until the next session.
+    for (const name of agentNames) active.add(name);
+    for (const name of agentNames) spawn(name);
+
+    // Await all workers; if the crew grew while awaiting, await again.
+    let results: WorkerResult[] = [];
+    for (;;) {
+      const snapshot = [...entries];
+      results = await Promise.all(snapshot.map((e) => e.promise));
+      if (entries.length === snapshot.length) break;
+    }
 
     const outcomes = results.flatMap((r) =>
       r.outcomes.map((o) => ({
@@ -229,7 +305,7 @@ export async function runPool(
 
     const driftTasks = listTasks(repoPath).filter((t) => (t.drift?.length ?? 0) > 0).length;
     const result: PoolResult = {
-      agents: agentNames,
+      agents: [...new Set(entries.map((e) => e.name))],
       completed: results.reduce((sum, r) => sum + r.completed, 0),
       failed: results.reduce((sum, r) => sum + r.failed, 0),
       reviewed: results.reduce((sum, r) => sum + r.reviewed, 0),
