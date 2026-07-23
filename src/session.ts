@@ -12,6 +12,7 @@ export type SessionHooks = {
   onChange?: (state: PoolState) => void;
   onLine?: (agent: string, taskId: string, event: import("./adapters/types.ts").AgentEvent) => void;
   onStatus?: (line: string) => void;
+  onPhase?: (agent: string, phase: import("./worker.ts").WorkerPhase, task?: { id: string; title: string }) => void;
 };
 
 export type Session = {
@@ -33,7 +34,7 @@ export function startSession(
     repoPath,
     crew,
     config,
-    { onChange: hooks.onChange, onLine: hooks.onLine, onStatus: hooks.onStatus },
+    { onChange: hooks.onChange, onLine: hooks.onLine, onStatus: hooks.onStatus, onPhase: hooks.onPhase },
     { sweepMs: 10_000, keepAlive: () => running, writedown: true }
   );
 

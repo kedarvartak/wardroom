@@ -133,7 +133,7 @@ for a 3-agent team). There is no live meter, no per-agent/per-task attribution.
   a single runaway task can't burn the session, and a destructive-op cap.
 
 **New:** `src/pricing.ts`; `tasks.ts` (`cost`, `decisions`); `worker.ts`
-(attribute usage, parse decisions); `bridge.ts` (gauge); `pool.ts`/`config.ts`
+(attribute usage, parse decisions); `tui/app.ts` (gauge); `pool.ts`/`config.ts`
 (per-task cap). **Acceptance.** Every done/failed task shows tokens + $; the
 gauge updates live and trips the cap mid-run with a coherent writedown.
 
